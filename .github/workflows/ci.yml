@@ -1,0 +1,35 @@
+name: ci
+
+# Runs a repo's CI recipe in its Nix devshell. Every baskingspot repo calls
+# this workflow, so CI has one shape. It also runs on this repo's own pushes.
+on:
+  workflow_call:
+    inputs:
+      recipe:
+        description: The just recipe to run.
+        type: string
+        default: ci
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/determinate-nix-action@d0c908e6cbe9f89f36ed8205a3ab6f092636916a # v3.23.1
+      - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7 # v15
+        with:
+          use-flakehub: false
+      - name: Run the recipe
+        run: nix develop --command just "$RECIPE"
+        env:
+          RECIPE: ${{ inputs.recipe || 'ci' }}

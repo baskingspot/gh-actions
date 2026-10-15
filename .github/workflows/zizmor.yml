@@ -1,0 +1,28 @@
+name: zizmor
+
+# Audits a repo's workflows and uploads the findings to the Security tab.
+# Every baskingspot repo calls this workflow. It also runs on this repo's own
+# pushes.
+on:
+  workflow_call:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    permissions:
+      # Upload SARIF to the GitHub Security tab (free on public repos).
+      security-events: write
+      # Only needed for private and internal repos. Harmless on public ones.
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
