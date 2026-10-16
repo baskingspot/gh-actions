@@ -18,14 +18,21 @@ name: release
 #
 # What it does, in order:
 #   1. Runs the repo's CI (.github/ci.yaml). A release never ships from red.
-#   2. Builds every target in .github/release.yaml, with `just release-build`.
-#   3. Writes SHA256SUMS, attests the tarballs, and creates the GitHub release
-#      with notes from the commits since the previous tag.
+#   2. Builds every platform in .github/release.yaml, with
+#      `just release-build TARGET DIR`, and bundles each one the way the org
+#      dictates: BINARY-TAG-ASSET.tar.gz, or .zip for Windows, holding one
+#      folder with the program and the LICENSE.
+#   3. Writes SHA256SUMS, attests the archives, and creates the GitHub release.
+#      The notes are docs/releases/TAG.md if the repo has it, else the commits
+#      since the previous tag, and an install section follows either way.
 #   4. Writes a Homebrew cask, installs it on Homebrew on Linux and macOS and
 #      runs the program, and only then commits it to baskingspot/homebrew-tap
 #      as the norm App. The tap holds nothing but casks.
 #
-# Another channel is another job after `publish`. The caller needs
+# release.yaml has `binary`, and optionally `platforms`, a list from linux-x64,
+# linux-arm64, macos-arm64, and windows-x64. The default is the first three.
+# Windows ships as a zip and nothing else. Another channel is another job after
+# `publish`. The caller needs
 # APP_PRIVATE_KEY and the variable APP_CLIENT_ID for step 4: both are org
 # values that a repo is added to when it ships a program.
 on:
@@ -60,21 +67,19 @@ jobs:
           set -euo pipefail
           config=$(yq -o=json '.' .github/release.yaml)
           binary=$(jq -er '.binary | select(type == "string")' <<< "${config}")
-          jq -e '[keys[]] | unique - ["binary", "targets", "requires"] | length == 0' <<< "${config}" > /dev/null \
+          jq -e '[keys[]] | unique - ["binary", "platforms", "requires"] | length == 0' <<< "${config}" > /dev/null \
             || { echo "release.yaml has an unknown top-level key" >&2; exit 1; }
           matrix=$(jq -c '
-            (.targets // error("release.yaml needs a targets list")) as $targets
-            | if ($targets | type) != "array" or ($targets | length) == 0 then error("targets must be a non-empty list") else . end
-            | ([$targets[] | keys[]] | unique - ["target", "asset", "blocking"]) as $extra
-            | if ($extra | length) > 0 then error("unknown target keys: " + ($extra | join(", "))) else . end
-            | [ $targets[]
-                | (if (.target | type) != "string" or (.asset | type) != "string" then error("every target needs a target and an asset") else . end)
-                | (if has("blocking") and ((.blocking | type) != "boolean") then error("blocking must be true or false") else . end)
-                | { target: .target, asset: .asset, blocking: (if has("blocking") then .blocking else true end) } ]
+            {"linux-x64": "x86_64-linux-musl", "linux-arm64": "aarch64-linux-musl",
+             "macos-arm64": "aarch64-macos", "windows-x64": "x86_64-windows"} as $triples
+            | (.platforms // ["linux-x64", "linux-arm64", "macos-arm64"]) as $platforms
+            | if ($platforms | type) != "array" or ($platforms | length) == 0 then error("platforms must be a non-empty list") else . end
+            | [ $platforms[] | . as $p
+                | if $triples[$p] == null then error("unknown platform: " + $p) else {asset: $p, target: $triples[$p]} end ]
           ' <<< "${config}")
           echo "binary=${binary}" >> "${GITHUB_OUTPUT}"
           echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
-          jq -r '.[] | "\(.target) as \(.asset)" + (if .blocking then "" else " (non-blocking)" end)' <<< "${matrix}"
+          jq -r '.[] | "\(.asset) from \(.target)"' <<< "${matrix}"
 
   ci:
     needs: plan
@@ -88,7 +93,6 @@ jobs:
     needs: [plan, ci]
     name: build ${{ matrix.asset }}
     runs-on: ubuntu-26.04
-    continue-on-error: ${{ !matrix.blocking }}
     permissions:
       contents: read
     strategy:
@@ -107,16 +111,24 @@ jobs:
           name: baskingspot
           extraPullNames: mattrobenolt
           skipPush: true
-      - name: Build and package
-        run: nix develop --command just release-build "$TARGET" "$ASSET" "$TAG"
+      - name: Build into a prefix
+        # The repo's recipe installs the program under stage/bin.
+        run: nix develop --command just release-build "$TARGET" stage
         env:
           TARGET: ${{ matrix.target }}
-          ASSET: ${{ matrix.asset }}
-          TAG: ${{ github.ref_name }}
+      - name: Bundle
+        uses: baskingspot/gh-actions/actions/package@b52fa7a308b6bc8ec3f48d6d931f06c2b94035a9 # main
+        with:
+          binary: ${{ needs.plan.outputs.binary }}
+          tag: ${{ github.ref_name }}
+          asset: ${{ matrix.asset }}
+          dir: stage
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist-${{ matrix.asset }}
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
           if-no-files-found: error
 
   publish:
@@ -142,15 +154,18 @@ jobs:
           path: dist
       - name: Checksums
         working-directory: dist
-        run: sha256sum -- *.tar.gz | tee SHA256SUMS
+        # No zip when a program does not ship Windows, so an empty glob is fine.
+        run: |
+          shopt -s nullglob
+          sha256sum -- *.tar.gz *.zip | tee SHA256SUMS
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
       - name: Release notes
-        # The notes script is the repo's own, so a repo can group its commits its own way.
-        run: scripts/release-notes.sh "${TAG}" | tee notes.md
-        env:
-          TAG: ${{ github.ref_name }}
+        uses: baskingspot/gh-actions/actions/release-notes@b52fa7a308b6bc8ec3f48d6d931f06c2b94035a9 # main
+        with:
+          tag: ${{ github.ref_name }}
+          repo: ${{ github.event.repository.name }}
       - name: Create the release
         run: gh release create "${TAG}" dist/* --repo "${REPO}" --title "${TAG}" --notes-file notes.md --verify-tag
         env:
@@ -165,7 +180,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
       - name: Write the cask
-        uses: baskingspot/gh-actions/actions/render-cask@fd576e7eded04add2e08a96ee4f48b871b93fc5b # main
+        uses: baskingspot/gh-actions/actions/render-cask@b52fa7a308b6bc8ec3f48d6d931f06c2b94035a9 # main
         with:
           repo: ${{ github.event.repository.name }}
           tag: ${{ github.ref_name }}
