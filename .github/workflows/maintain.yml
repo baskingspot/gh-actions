@@ -1,7 +1,8 @@
 name: maintain
 
 # Keeps every repo in the org current. Weekly, for each repo it finds, this
-# updates flake.lock and the pinned Actions. A change must pass the repo's own
+# updates flake.lock, the pinned Actions, and the pinned base images of a
+# Dockerfile. A change must pass the repo's own
 # `just ci` first. Then it lands on the default branch as one signed commit from
 # the baskingspot GitHub App. There are no pull requests. A change that fails
 # `just ci` is not pushed, and the run fails so the failure shows in Actions.
@@ -62,6 +63,9 @@ jobs:
             if gh api "repos/${OWNER}/${repo}/contents/.github/workflows" > /dev/null 2>&1; then
               include=$(jq -c --arg r "${repo}" '. + [{repo: $r, task: "pins"}]' <<< "${include}")
             fi
+            if gh api "repos/${OWNER}/${repo}/contents/Dockerfile" > /dev/null 2>&1; then
+              include=$(jq -c --arg r "${repo}" '. + [{repo: $r, task: "images"}]' <<< "${include}")
+            fi
           done
           echo "matrix=${include}" >> "${GITHUB_OUTPUT}"
           echo "${include}" | jq .
@@ -86,9 +90,9 @@ jobs:
         include: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
       # Two token steps, so the pin job alone gets the workflows permission.
-      - name: Mint a token to update flake.lock
+      - name: Mint a token to update flake.lock or pinned images
         id: token-flake
-        if: matrix.task == 'flake'
+        if: matrix.task == 'flake' || matrix.task == 'images'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.APP_CLIENT_ID }}
@@ -146,6 +150,16 @@ jobs:
           echo "ci: update pinned actions" > "${RUNNER_TEMP}/headline.txt"
         env:
           GITHUB_TOKEN: ${{ steps.token-flake.outputs.token || steps.token-pins.outputs.token }}
+      - name: Update pinned base images
+        if: matrix.task == 'images'
+        working-directory: target
+        # The runner's own Docker reads the registries. The script pins each
+        # base image of the root Dockerfile and any *.hcl bake file to its
+        # current digest, and follows the tag when it moves.
+        run: |
+          set -euo pipefail
+          nix develop ../tools --command ../tools/scripts/pin-images.sh . 2>&1 | tee "${RUNNER_TEMP}/body.md"
+          echo "docker: update pinned base images" > "${RUNNER_TEMP}/headline.txt"
       - name: Check for changes
         id: changed
         working-directory: target

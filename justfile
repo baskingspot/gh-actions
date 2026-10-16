@@ -6,10 +6,12 @@
 default:
     @just --list
 
-[doc("Check formatting, lint the workflows, and audit them with zizmor")]
+[doc("Check formatting, lint the scripts and the workflows, and audit them with zizmor")]
 [group("lint")]
 lint:
     nix fmt -- --ci
+    shfmt -d scripts
+    shellcheck scripts/*.sh
     oxfmt --check README.md AGENTS.md
     actionlint
     zizmor .
@@ -19,12 +21,18 @@ lint:
 [group("lint")]
 fmt:
     nix fmt
+    shfmt -w scripts
     oxfmt README.md AGENTS.md
     just --fmt
 
+[doc("Run the tests for the maintenance scripts, which need no network")]
+[group("test")]
+test:
+    scripts/test-pin-images.sh
+
 [doc("Everything CI runs")]
 [group("ci")]
-ci: lint
+ci: test lint
 
 [doc("Pin every Action to a commit SHA, leaving versions as they are. Needs GITHUB_TOKEN")]
 [group("actions")]
