@@ -41,7 +41,7 @@ if grep -q 'Windows' <<<"${notes}"; then
 	echo "a Windows line appeared without a zip" >&2
 	exit 1
 fi
-grep -qF 'gh attestation verify FILE -R baskingspot/tool' <<<"${notes}"
+grep -qF 'gh attestation verify FILE -R baskingspot/tool --signer-repo baskingspot/gh-actions' <<<"${notes}"
 
 # The first release covers every commit.
 first=$("${here}/release-notes.sh" v0.1.0 tool dist)

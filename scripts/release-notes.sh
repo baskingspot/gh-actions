@@ -60,4 +60,4 @@ for zip in "${dist}"/*.zip; do
 	echo "- Windows: unzip \`$(basename "${zip}")\` below and put the program on your \`PATH\`."
 done
 echo
-echo "Every file is listed in \`SHA256SUMS\`, and attested. Check one with \`gh attestation verify FILE -R baskingspot/${repo}\`."
+echo "Every file is listed in \`SHA256SUMS\`, and attested by the org's release workflow. Check one with \`gh attestation verify FILE -R baskingspot/${repo} --signer-repo baskingspot/gh-actions\`."
