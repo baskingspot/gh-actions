@@ -162,7 +162,7 @@ jobs:
         with:
           subject-path: dist/*
       - name: Release notes
-        uses: baskingspot/gh-actions/actions/release-notes@b52fa7a308b6bc8ec3f48d6d931f06c2b94035a9 # main
+        uses: baskingspot/gh-actions/actions/release-notes@6d3da94fa49af99ba464ab23ce705e05ff89de05 # main
         with:
           tag: ${{ github.ref_name }}
           repo: ${{ github.event.repository.name }}
