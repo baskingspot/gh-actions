@@ -1,0 +1,36 @@
+name: Package a program for release
+description: Bundle one built platform into the archive the org dictates, a tarball or, for Windows, a zip.
+inputs:
+  binary:
+    description: The program's name.
+    required: true
+  tag:
+    description: The release tag, such as v1.2.3.
+    required: true
+  asset:
+    description: The platform, such as linux-x64 or windows-x64.
+    required: true
+  dir:
+    description: The prefix the program's release-build installed into. Its files are in dir/bin.
+    required: true
+  out:
+    description: Where to write the archive.
+    default: dist
+  license:
+    description: The license file to include.
+    default: LICENSE
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) \
+          "${ACTION_PATH}/../../scripts/package.sh" "${BINARY}" "${TAG}" "${ASSET}" "${DIR}" "${OUT}" "${LICENSE_FILE}"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        BINARY: ${{ inputs.binary }}
+        TAG: ${{ inputs.tag }}
+        ASSET: ${{ inputs.asset }}
+        DIR: ${{ inputs.dir }}
+        OUT: ${{ inputs.out }}
+        LICENSE_FILE: ${{ inputs.license }}

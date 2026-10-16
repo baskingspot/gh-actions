@@ -33,6 +33,7 @@
               ruff
               ty
               yq-go
+              zip
             ];
           };
         };

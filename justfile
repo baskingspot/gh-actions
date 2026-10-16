@@ -33,6 +33,8 @@ fmt:
 [group("test")]
 test:
     scripts/test-pin-images.sh
+    scripts/test-package.sh
+    scripts/test-release-notes.sh
     cd scripts && python3 -m unittest -v test_render_cask
 
 [doc("Everything CI runs")]

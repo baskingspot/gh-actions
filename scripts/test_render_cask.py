@@ -104,20 +104,29 @@ class ParseTest(unittest.TestCase):
             rc.parse_sums(text), {"one.tar.gz": "a" * 64, "two.tar.gz": "b" * 64}
         )
 
-    def test_zig_targets_map_to_platforms(self) -> None:
-        self.assertEqual(rc.platform_of("x86_64-linux-musl"), ("linux", "intel"))
-        self.assertEqual(rc.platform_of("aarch64-linux-gnu"), ("linux", "arm"))
-        self.assertEqual(rc.platform_of("aarch64-macos"), ("macos", "arm"))
+    def test_assets_map_to_homebrew_platforms(self) -> None:
+        self.assertEqual(rc.platform_of("linux-x64"), ("linux", "intel"))
+        self.assertEqual(rc.platform_of("linux-arm64"), ("linux", "arm"))
+        self.assertEqual(rc.platform_of("macos-arm64"), ("macos", "arm"))
 
-    def test_an_unknown_target_is_an_error_not_a_skip(self) -> None:
+    def test_an_unknown_platform_is_an_error_not_a_skip(self) -> None:
         with self.assertRaises(ValueError):
-            rc.platform_of("riscv64-linux-musl")
+            rc.platform_of("riscv64-linux")
+
+    def test_the_default_platforms_are_the_three_first_party_ones(self) -> None:
+        program = rc.program_from("x", {"binary": "x"}, "Does a thing.", "u")
+        self.assertEqual(
+            [t.asset for t in program.targets],
+            ["linux-x64", "linux-arm64", "macos-arm64"],
+        )
+
+    def test_windows_is_shipped_as_a_zip_and_has_no_cask_block(self) -> None:
+        config = {"binary": "x", "platforms": ["linux-x64", "windows-x64"]}
+        program = rc.program_from("x", config, "Does a thing.", "u")
+        self.assertEqual([t.asset for t in program.targets], ["linux-x64"])
 
     def test_the_description_loses_its_period_and_must_fit(self) -> None:
-        config = {
-            "binary": "x",
-            "targets": [{"target": "aarch64-macos", "asset": "macos-arm64"}],
-        }
+        config = {"binary": "x"}
         self.assertEqual(
             rc.program_from("x", config, "Does a thing.", "u").description,
             "Does a thing",

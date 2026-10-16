@@ -1,0 +1,27 @@
+name: Write release notes
+description: The repo's docs/releases/TAG.md if it has one, else the commits since the previous tag, then an install section.
+inputs:
+  tag:
+    description: The release tag, such as v1.2.3.
+    required: true
+  repo:
+    description: The repo name.
+    required: true
+  dist:
+    description: The directory of release archives, to find a Windows zip.
+    default: dist
+  out:
+    description: Where to write the notes.
+    default: notes.md
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        "${ACTION_PATH}/../../scripts/release-notes.sh" "${TAG}" "${REPO}" "${DIST}" | tee "${OUT}"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        TAG: ${{ inputs.tag }}
+        REPO: ${{ inputs.repo }}
+        DIST: ${{ inputs.dist }}
+        OUT: ${{ inputs.out }}
