@@ -153,12 +153,14 @@ jobs:
       - name: Update pinned base images
         if: matrix.task == 'images'
         working-directory: target
-        # The runner's own Docker reads the registries. The script pins each
+        # Outside the Nix shell on purpose: the script needs only jq, perl, and
+        # the runner's own Docker, and a Nix build log would end up in the
+        # commit body. The script pins each
         # base image of the root Dockerfile and any *.hcl bake file to its
         # current digest, and follows the tag when it moves.
         run: |
           set -euo pipefail
-          nix develop ../tools --command ../tools/scripts/pin-images.sh . 2>&1 | tee "${RUNNER_TEMP}/body.md"
+          ../tools/scripts/pin-images.sh . | tee "${RUNNER_TEMP}/body.md"
           echo "docker: update pinned base images" > "${RUNNER_TEMP}/headline.txt"
       - name: Check for changes
         id: changed
