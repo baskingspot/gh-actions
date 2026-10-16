@@ -134,7 +134,10 @@ jobs:
         working-directory: target
         run: |
           set -euo pipefail
-          nix flake update 2>&1 | tee "${RUNNER_TEMP}/body.md"
+          nix flake update 2>&1 | tee "${RUNNER_TEMP}/flake.log"
+          # The commit body is the list of inputs that moved: the "Updated
+          # input" blocks, not Nix's unpacking and warning lines.
+          awk '/^• / { keep = 1 } /^[^• \t]/ { keep = 0 } keep' "${RUNNER_TEMP}/flake.log" > "${RUNNER_TEMP}/body.md"
           echo "flake.lock: update inputs" > "${RUNNER_TEMP}/headline.txt"
       - name: Update pinned Actions
         if: matrix.task == 'pins'
@@ -194,7 +197,7 @@ jobs:
           jq -n \
             --arg repo "${REPO}" --arg branch "${branch}" --arg head "${head}" \
             --arg headline "$(cat "${RUNNER_TEMP}/headline.txt")" \
-            --arg body "$(cat "${RUNNER_TEMP}/body.md")" \
+            --arg body "$(head -c 4000 "${RUNNER_TEMP}/body.md")" \
             --argjson additions "${additions}" \
             '{
               query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { url } } }",
