@@ -1,12 +1,14 @@
 name: maintain
 
 # Keeps every repo in the org current. Weekly, for each repo it finds, this
-# opens one pull request that updates flake.lock and another that updates the
-# pinned Actions. The pull requests come from the baskingspot GitHub App, so
-# the commits are signed and the repo's own CI runs on them.
+# updates flake.lock and the pinned Actions. A change must pass the repo's own
+# `just ci` first. Then it lands on the default branch as one signed commit from
+# the baskingspot GitHub App. There are no pull requests. A change that fails
+# `just ci` is not pushed, and the run fails so the failure shows in Actions.
 #
 # The App's ID is the org variable APP_CLIENT_ID. Its private key is the secret
-# APP_PRIVATE_KEY, limited to this repo.
+# APP_PRIVATE_KEY, limited to this repo. If a repo protects its default branch,
+# the App must be a bypass actor in that ruleset.
 on:
   workflow_dispatch:
     inputs:
@@ -19,6 +21,11 @@ on:
     - cron: "23 5 * * 1"
 
 permissions: {}
+
+# One run at a time, so two runs cannot race to push the same repo.
+concurrency:
+  group: maintain
+  cancel-in-progress: false
 
 jobs:
   discover:
@@ -70,9 +77,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     strategy:
+      # One repo's failure must not stop the others. max-parallel 1 keeps the
+      # runs in order, so the log reads one repo at a time.
       fail-fast: false
+      max-parallel: 1
       matrix:
         include: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
@@ -87,7 +96,6 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ matrix.repo }}
           permission-contents: write
-          permission-pull-requests: write
       - name: Mint a token to update pinned Actions
         id: token-pins
         if: matrix.task == 'pins'
@@ -98,7 +106,6 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ matrix.repo }}
           permission-contents: write
-          permission-pull-requests: write
           permission-workflows: write
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -110,37 +117,74 @@ jobs:
           token: ${{ steps.token-flake.outputs.token || steps.token-pins.outputs.token }}
           path: target
           persist-credentials: false
-      - uses: DeterminateSystems/determinate-nix-action@d0c908e6cbe9f89f36ed8205a3ab6f092636916a # v3.23.1
-      - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7 # v15
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
-          use-flakehub: false
+          install_url: https://releases.nixos.org/nix/nix-2.35.3/install
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: baskingspot
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Update flake.lock
         if: matrix.task == 'flake'
         working-directory: target
         run: |
           set -euo pipefail
           nix flake update 2>&1 | tee "${RUNNER_TEMP}/body.md"
+          echo "flake.lock: update inputs" > "${RUNNER_TEMP}/headline.txt"
       - name: Update pinned Actions
         if: matrix.task == 'pins'
         working-directory: target
         run: |
           set -euo pipefail
           # Three days of trailing age, so a hijacked tag has time to be caught.
-          nix develop ../tools --command pinact run --update --min-age 3
+          nix develop ../tools --command pinact run --update --min-age 3 2>&1 | tee "${RUNNER_TEMP}/pinact.log"
           echo "Pins every Action in .github/workflows to the newest release that is at least three days old." > "${RUNNER_TEMP}/body.md"
+          echo "ci: update pinned actions" > "${RUNNER_TEMP}/headline.txt"
         env:
           GITHUB_TOKEN: ${{ steps.token-flake.outputs.token || steps.token-pins.outputs.token }}
-      - name: Open the pull request
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
-        with:
-          token: ${{ steps.token-flake.outputs.token || steps.token-pins.outputs.token }}
-          path: target
-          sign-commits: true
-          delete-branch: true
-          branch: ${{ matrix.task == 'flake' && 'maintain/flake-lock' || 'maintain/action-pins' }}
-          commit-message: "${{ matrix.task == 'flake' && 'flake.lock: update inputs' || 'ci: update pinned actions' }}"
-          title: "${{ matrix.task == 'flake' && 'flake.lock: update inputs' || 'ci: update pinned actions' }}"
-          body-path: ${{ runner.temp }}/body.md
-          labels: |
-            dependencies
-            automated
+      - name: Check for changes
+        id: changed
+        working-directory: target
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Nothing to update."
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            git diff --stat
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+          fi
+      - name: Run the repo's CI
+        if: steps.changed.outputs.changed == 'true'
+        working-directory: target
+        run: nix develop --command just ci
+      - name: Push one signed commit
+        if: steps.changed.outputs.changed == 'true'
+        working-directory: target
+        # GitHub's createCommitOnBranch API signs the commit as the App.
+        run: |
+          set -euo pipefail
+          branch=$(git branch --show-current)
+          head=$(git rev-parse HEAD)
+          additions='[]'
+          while IFS= read -r path; do
+            additions=$(jq -c --arg p "${path}" --arg c "$(base64 -w0 "${path}")" \
+              '. + [{path: $p, contents: $c}]' <<< "${additions}")
+          done < <(git diff --name-only)
+          jq -n \
+            --arg repo "${REPO}" --arg branch "${branch}" --arg head "${head}" \
+            --arg headline "$(cat "${RUNNER_TEMP}/headline.txt")" \
+            --arg body "$(cat "${RUNNER_TEMP}/body.md")" \
+            --argjson additions "${additions}" \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { url } } }",
+              variables: { input: {
+                branch: { repositoryNameWithOwner: $repo, branchName: $branch },
+                message: { headline: $headline, body: $body },
+                fileChanges: { additions: $additions },
+                expectedHeadOid: $head
+              } }
+            }' | gh api graphql --input - --jq '.data.createCommitOnBranch.commit.url'
+        env:
+          GH_TOKEN: ${{ steps.token-flake.outputs.token || steps.token-pins.outputs.token }}
+          REPO: ${{ github.repository_owner }}/${{ matrix.repo }}
