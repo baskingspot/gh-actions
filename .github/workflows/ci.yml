@@ -2,6 +2,11 @@ name: ci
 
 # Runs a repo's CI recipe in its Nix devshell. Every baskingspot repo calls
 # this workflow, so CI has one shape. It also runs on this repo's own pushes.
+#
+# Nix is installed with the Cachix installer, pinned to one release so CI
+# cannot drift from a new stable. Builds pull from the baskingspot Cachix
+# cache. Only a run on main pushes to it, so a pull request cannot put
+# anything in the cache.
 on:
   workflow_call:
     inputs:
@@ -9,6 +14,10 @@ on:
         description: The just recipe to run.
         type: string
         default: ci
+    secrets:
+      CACHIX_AUTH_TOKEN:
+        description: Write token for the baskingspot Cachix cache.
+        required: false
   push:
     branches: [main]
   pull_request:
@@ -20,15 +29,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: DeterminateSystems/determinate-nix-action@d0c908e6cbe9f89f36ed8205a3ab6f092636916a # v3.23.1
-      - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7 # v15
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
-          use-flakehub: false
+          install_url: https://releases.nixos.org/nix/nix-2.35.3/install
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: baskingspot
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: ${{ github.ref != 'refs/heads/main' }}
       - name: Run the recipe
         run: nix develop --command just "$RECIPE"
         env:
