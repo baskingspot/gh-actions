@@ -50,7 +50,8 @@ grep -qx -- '- first thing' <<<"${first}"
 
 # A Windows zip adds its line.
 touch dist/tool-v0.2.0-windows-x64.zip
-"${here}/release-notes.sh" v0.2.0 tool dist | grep -qF 'Windows: unzip `tool-v0.2.0-windows-x64.zip`'
+withzip=$("${here}/release-notes.sh" v0.2.0 tool dist)
+grep -qF 'Windows: unzip `tool-v0.2.0-windows-x64.zip`' <<<"${withzip}"
 
 # A written notes file replaces the generated body, and the install section stays.
 mkdir -p docs/releases
