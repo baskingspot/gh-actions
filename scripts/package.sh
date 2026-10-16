@@ -49,6 +49,8 @@ test -f "${license}" || {
 stage=$(mktemp -d)
 trap 'rm -rf "${stage}"' EXIT
 mkdir -p "${stage}/${name}" "${out}"
+# The zip is written from inside the staging folder, so the output must be absolute.
+out=$(cd "${out}" && pwd)
 cp -- "${files[@]}" "${stage}/${name}/"
 cp -- "${license}" "${stage}/${name}/LICENSE"
 chmod 0755 "${stage}/${name}"

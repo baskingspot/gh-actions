@@ -39,6 +39,12 @@ assert "tool-v1.2.3-windows-x64/LICENSE" in names, names
 assert not any(n.endswith(".pdb") for n in names), names
 PY
 
+# A relative output directory works too, as it does in CI (`dist`).
+(cd "${work}" && "${here}/package.sh" tool v1.2.3 windows-x64 prefix rel-out LICENSE >/dev/null)
+test -f "${work}/rel-out/tool-v1.2.3-windows-x64.zip"
+(cd "${work}" && "${here}/package.sh" tool v1.2.3 linux-x64 prefix rel-out LICENSE >/dev/null)
+test -f "${work}/rel-out/tool-v1.2.3-linux-x64.tar.gz"
+
 # An empty prefix, or a missing license, stops the release.
 if "${here}/package.sh" tool v1.2.3 linux-x64 "${work}/empty" "${work}/out" "${work}/LICENSE" 2>/dev/null; then
 	echo "an empty prefix must fail" >&2
