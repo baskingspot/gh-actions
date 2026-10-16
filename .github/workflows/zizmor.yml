@@ -13,7 +13,7 @@ permissions: {}
 
 jobs:
   zizmor:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       # Upload SARIF to the GitHub Security tab (free on public repos).
       security-events: write

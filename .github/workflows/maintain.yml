@@ -31,7 +31,7 @@ jobs:
   discover:
     # Skip quietly until the App is set up.
     if: vars.APP_CLIENT_ID != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     outputs:
       matrix: ${{ steps.find.outputs.matrix }}
@@ -74,7 +74,7 @@ jobs:
     needs: discover
     if: needs.discover.outputs.matrix != '[]'
     name: ${{ matrix.task }} ${{ matrix.repo }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     strategy:
