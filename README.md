@@ -54,6 +54,14 @@ with:
   recipes: '["test", "lint", "doc"]'
 ```
 
+To let some entries fail without failing the run, list them in `non-blocking`. It is for a target that is not first class: its job still runs and shows its result, but a failure leaves the run green.
+
+```yaml
+with:
+  recipes: '["check x86_64-linux", "check wasm32-wasi"]'
+  non-blocking: '["check wasm32-wasi"]'
+```
+
 A recipe may carry arguments: `'["check x86_64-linux", "check wasm32-wasi"]'` runs `just check x86_64-linux` and `just check wasm32-wasi` as two jobs. This is how one slow recipe, such as a cross-target compile gate, becomes a job per target.
 
 Recipes and runners multiply: three recipes on two runners is six jobs. The default is `["ci"]`. The jobs are named `<recipe> (<runner>)`.

@@ -18,6 +18,10 @@ on:
         description: A JSON array of runner labels. Every recipe runs once on each, in parallel.
         type: string
         default: '["ubuntu-26.04"]'
+      non-blocking:
+        description: A JSON array of entries from recipes that may fail without failing the run, for targets that are not first class. They still run and still show.
+        type: string
+        default: "[]"
       zig-cache:
         description: Keep the Zig build cache between runs. It hits only on the same CPU model for a native build, so measure it. A run on the default branch saves it, and every run restores the newest one.
         type: boolean
@@ -36,6 +40,7 @@ jobs:
   ci:
     name: ${{ matrix.recipe }} (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ contains(fromJSON(inputs.non-blocking || '[]'), matrix.recipe) }}
     strategy:
       # One runner's failure must not hide the others.
       fail-fast: false
