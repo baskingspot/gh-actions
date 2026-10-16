@@ -136,9 +136,12 @@ jobs:
         working-directory: target
         run: |
           set -euo pipefail
-          # Three days of trailing age, so a hijacked tag has time to be caught.
-          nix develop ../tools --command pinact run --update --min-age 3 2>&1 | tee "${RUNNER_TEMP}/pinact.log"
-          echo "Pins every Action in .github/workflows to the newest release that is at least three days old." > "${RUNNER_TEMP}/body.md"
+          # Three days of trailing age for other people's actions, so a hijacked
+          # tag has time to be caught. Our own org's actions skip the age rule,
+          # so a release here reaches every repo at once.
+          nix develop ../tools --command pinact run --update --min-age 3 --exclude '^baskingspot/' 2>&1 | tee "${RUNNER_TEMP}/pinact.log"
+          nix develop ../tools --command pinact run --update --include '^baskingspot/' 2>&1 | tee -a "${RUNNER_TEMP}/pinact.log"
+          echo "Pins every Action in .github/workflows to its newest release. Actions outside baskingspot must be at least three days old." > "${RUNNER_TEMP}/body.md"
           echo "ci: update pinned actions" > "${RUNNER_TEMP}/headline.txt"
         env:
           GITHUB_TOKEN: ${{ steps.token-flake.outputs.token || steps.token-pins.outputs.token }}

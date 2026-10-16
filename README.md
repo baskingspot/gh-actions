@@ -44,7 +44,7 @@ Pin the call by commit SHA. The maintenance job moves the pin when this repo cha
 `maintain.yml` runs every Monday at 05:23 UTC. It lists the org's repos, skipping archived repos and forks. For each repo it runs up to two updates, one repo at a time:
 
 - `flake.lock: update inputs`, for a repo that has a `flake.lock`. The commit message shows what moved.
-- `ci: update pinned actions`, for a repo with workflows. It runs `pinact run --update --min-age 3`, so it only pins to a release that is at least three days old.
+- `ci: update pinned actions`, for a repo with workflows. It runs `pinact run --update`. Actions from other owners must be at least three days old. Our own `baskingspot/` actions skip that rule, so a release of a shared workflow reaches every repo at once.
 
 A change has to pass the repo's own `just ci` first. Then it lands on the default branch as one commit, signed by the baskingspot GitHub App. There are no pull requests. If `just ci` fails, nothing is pushed and the run fails, so the failure shows in Actions. A repo needs nothing of its own to take part, except a `ci` recipe. If a repo protects its default branch, add the App as a bypass actor in the ruleset.
 

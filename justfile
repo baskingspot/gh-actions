@@ -31,9 +31,11 @@ ci: lint
 pin:
     pinact run
 
-# Three days of trailing age: a release has to survive that long before we
-# pin to it, so a hijacked tag has time to be caught.
-[doc("Pin every Action to the newest release at least three days old. Needs GITHUB_TOKEN")]
+# Three days of trailing age for other people's actions, so a hijacked tag has
+# time to be caught. Our own org's actions skip the age rule, so a release in
+# baskingspot/gh-actions reaches every repo at once.
+[doc("Pin every Action to its newest release. Outside baskingspot, at least three days old. Needs GITHUB_TOKEN")]
 [group("actions")]
 update:
-    pinact run --update --min-age 3
+    pinact run --update --min-age 3 --exclude '^baskingspot/'
+    pinact run --update --include '^baskingspot/'
