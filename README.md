@@ -11,7 +11,7 @@ Every repo in the org has the same shape: a Nix flake, a justfile with a `ci` re
 
 ## Workflows
 
-- `ci.yml` runs a repo's `just ci` recipe inside its Nix devshell. It installs Nix 2.35.3 with the Cachix installer and uses the `baskingspot` Cachix cache. A run on the default branch pushes new store paths to the cache. A pull request only reads from it. Pass `recipe` to run another recipe.
+- `ci.yml` runs a repo's `just ci` recipe inside its Nix devshell. It installs Nix 2.35.3 with the Cachix installer and uses the `baskingspot` Cachix cache, and also pulls from `mattrobenolt`, where `ziglint` and `zigdoc` are prebuilt until they move under the org. A run on the default branch pushes new store paths to the cache. A pull request only reads from it. Pass `recipe` to run another recipe.
 - `zizmor.yml` audits the repo's workflows and uploads the findings to the Security tab.
 
 A repo calls them like this:

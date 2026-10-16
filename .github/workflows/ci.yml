@@ -39,6 +39,8 @@ jobs:
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: baskingspot
+          # ziglint and zigdoc are prebuilt in the mattrobenolt cache until they move under baskingspot.
+          extraPullNames: mattrobenolt
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: ${{ github.ref != 'refs/heads/main' }}
       - name: Run the recipe
