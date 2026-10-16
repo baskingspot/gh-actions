@@ -165,7 +165,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
       - name: Write the cask
-        uses: baskingspot/gh-actions/actions/render-cask@7a0c10c2647cc427c76a762f9eea1970512813e4 # main
+        uses: baskingspot/gh-actions/actions/render-cask@fd576e7eded04add2e08a96ee4f48b871b93fc5b # main
         with:
           repo: ${{ github.event.repository.name }}
           tag: ${{ github.ref_name }}
