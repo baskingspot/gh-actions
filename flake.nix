@@ -29,6 +29,10 @@
               jq
               oxfmt
               perl
+              python3
+              ruff
+              ty
+              yq-go
             ];
           };
         };

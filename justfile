@@ -12,6 +12,9 @@ lint:
     nix fmt -- --ci
     shfmt -d scripts
     shellcheck scripts/*.sh
+    ruff check scripts
+    ruff format --check scripts
+    ty check scripts
     oxfmt --check README.md AGENTS.md .github
     actionlint
     zizmor .
@@ -22,6 +25,7 @@ lint:
 fmt:
     nix fmt
     shfmt -w scripts
+    ruff format scripts
     oxfmt README.md AGENTS.md .github
     just --fmt
 
@@ -29,6 +33,7 @@ fmt:
 [group("test")]
 test:
     scripts/test-pin-images.sh
+    cd scripts && python3 -m unittest -v test_render_cask
 
 [doc("Everything CI runs")]
 [group("ci")]

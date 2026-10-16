@@ -1,0 +1,42 @@
+name: Render a Homebrew cask
+description: Write a cask for one release from the program's release.yaml and the release's SHA256SUMS.
+inputs:
+  repo:
+    description: The repo name, which is the cask token.
+    required: true
+  tag:
+    description: The release tag, such as v1.2.3.
+    required: true
+  sums:
+    description: The path to the release's SHA256SUMS.
+    required: true
+  description:
+    description: The cask description, from the repo's About text. 79 characters at most.
+    required: true
+  homepage:
+    description: The cask homepage.
+    required: true
+  out:
+    description: Where to write the cask.
+    required: true
+  release-yaml:
+    description: The program's release.yaml.
+    default: .github/release.yaml
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: >-
+        python3 "${ACTION_PATH}/../../scripts/render_cask.py"
+        --repo "${REPO}" --tag "${TAG}" --sums "${SUMS}"
+        --description "${DESCRIPTION}" --homepage "${HOMEPAGE}"
+        --release-yaml "${RELEASE_YAML}" --out "${OUT}"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        REPO: ${{ inputs.repo }}
+        TAG: ${{ inputs.tag }}
+        SUMS: ${{ inputs.sums }}
+        DESCRIPTION: ${{ inputs.description }}
+        HOMEPAGE: ${{ inputs.homepage }}
+        RELEASE_YAML: ${{ inputs.release-yaml }}
+        OUT: ${{ inputs.out }}
