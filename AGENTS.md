@@ -4,7 +4,7 @@ Working notes for AI coding agents in baskingspot/gh-actions.
 
 ## What this is
 
-The shared workflows for every baskingspot repo, and the maintenance job that opens flake.lock and action-pin pull requests across the org. It is the reference implementation of org CI, so each repo's workflows should look like the ones here.
+The shared workflows for every baskingspot repo, and the maintenance job that pushes flake.lock and action-pin updates to every org repo's default branch. It is the reference implementation of org CI, so each repo's workflows should look like the ones here.
 
 ## Environment
 
@@ -32,6 +32,8 @@ just ci
 - Never put a `${{ }}` expression inside a `run:` script. Pass it through `env:`.
 - zizmor must pass. Suppress a finding only with an inline `# zizmor: ignore[rule]` comment and a sentence above it that says why.
 - Mint GitHub App tokens per job, for one repo, with the least permissions the job needs. Only the pin-update job gets `workflows: write`.
+- Nix is installed with `cachix/install-nix-action`, pinned to one Nix release through `install_url`, and cached with `cachix/cachix-action` into the `baskingspot` cache. Only a run on the default branch pushes to the cache.
+- The maintenance job commits straight to the default branch with GitHub's `createCommitOnBranch` API, so the commit is signed by the App. It runs the repo's `just ci` first and pushes nothing if that fails.
 - Add a maintenance task by adding a `task` value in the `discover` job and the steps that handle it in the `update` job.
 - Recipes carry a `[doc("...")]` directive and a `[group("...")]`. Commit messages are one line, `area: summary`. Every commit is signed. Do not rewrite pushed history.
 - Public text follows the org voice guide in the `.github` repo, `docs/VOICE.md`.

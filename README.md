@@ -11,7 +11,7 @@ Every repo in the org has the same shape: a Nix flake, a justfile with a `ci` re
 
 ## Workflows
 
-- `ci.yml` runs a repo's `just ci` recipe inside its Nix devshell, with the Determinate Nix installer and a cache. Pass `recipe` to run another recipe.
+- `ci.yml` runs a repo's `just ci` recipe inside its Nix devshell. It installs Nix 2.35.3 with the Cachix installer and uses the `baskingspot` Cachix cache. A run on the default branch pushes new store paths to the cache. A pull request only reads from it. Pass `recipe` to run another recipe.
 - `zizmor.yml` audits the repo's workflows and uploads the findings to the Security tab.
 
 A repo calls them like this:
@@ -30,20 +30,23 @@ jobs:
   ci:
     permissions:
       contents: read
-      id-token: write
     uses: baskingspot/gh-actions/.github/workflows/ci.yml@COMMIT # vX.Y.Z
+    secrets:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 ```
+
+`CACHIX_AUTH_TOKEN` is an org secret, visible to every repo. A workflow that calls another one does not pass secrets on its own, so the call lists it. Without it the run still works, and only reads the cache.
 
 Pin the call by commit SHA. The maintenance job moves the pin when this repo changes.
 
 ## Keeping repos current
 
-`maintain.yml` runs every Monday at 05:23 UTC. It lists the org's repos, skipping archived repos and forks. For each repo it opens up to two pull requests:
+`maintain.yml` runs every Monday at 05:23 UTC. It lists the org's repos, skipping archived repos and forks. For each repo it runs up to two updates, one repo at a time:
 
-- `flake.lock: update inputs`, for a repo that has a `flake.lock`. The body shows what moved.
-- `ci: update pinned actions`, for a repo with workflows. It runs `pinact run --update`.
+- `flake.lock: update inputs`, for a repo that has a `flake.lock`. The commit message shows what moved.
+- `ci: update pinned actions`, for a repo with workflows. It runs `pinact run --update --min-age 3`, so it only pins to a release that is at least three days old.
 
-The pull requests come from the baskingspot GitHub App, so the commits are signed, and the repo's own CI runs on them. A repo needs nothing of its own to take part.
+A change has to pass the repo's own `just ci` first. Then it lands on the default branch as one commit, signed by the baskingspot GitHub App. There are no pull requests. If `just ci` fails, nothing is pushed and the run fails, so the failure shows in Actions. A repo needs nothing of its own to take part, except a `ci` recipe. If a repo protects its default branch, add the App as a bypass actor in the ruleset.
 
 To run it now for one repo:
 
