@@ -38,6 +38,36 @@ jobs:
 
 `CACHIX_AUTH_TOKEN` is an org secret, visible to every repo. A workflow that calls another one does not pass secrets on its own, so the call lists it. Without it the run still works, and only reads the cache.
 
+The jobs come from `.github/ci.yaml` in the calling repo, which is the way to configure a repo. Without that file, the `recipes`, `runners`, and `non-blocking` inputs below apply.
+
+```yaml
+# .github/ci.yaml
+zig-cache: false # optional
+jobs:
+  - recipe: test
+  - recipe: lint
+  - recipe: check-target x86_64-linux
+  - recipe: check-target x86-linux
+    blocking: false # a stretch goal: it runs and shows, and never fails CI
+  - recipe: test
+    runners: [macos-26] # the default is [ubuntu-26.04]
+    blocking: false
+```
+
+Each entry is a job. `recipe` is a `just` recipe with its arguments. A `runners` list makes one job per runner. `blocking: false` marks a stretch goal. A short first job reads the file and plans the matrix, which takes about 10 seconds. The caller then needs no `with:` block:
+
+```yaml
+jobs:
+  ci:
+    permissions:
+      contents: read
+    uses: baskingspot/gh-actions/.github/workflows/ci.yml@COMMIT # vX.Y.Z
+    secrets:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+```
+
+The inputs work as before when a repo has no `ci.yaml`.
+
 To run the recipe on more than one runner, pass `runners`, a JSON array of labels. Each label is a separate job, and they run in parallel. All of these are free on a public repo:
 
 ```yaml

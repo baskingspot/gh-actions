@@ -1,7 +1,22 @@
 name: ci
 
-# Runs a repo's CI recipe in its Nix devshell. Every baskingspot repo calls
-# this workflow, so CI has one shape. It also runs on this repo's own pushes.
+# Runs a repo's CI recipes in its Nix devshell, one job each. Every
+# baskingspot repo calls this workflow, so CI has one shape. It also runs on
+# this repo's own pushes.
+#
+# What to run comes from .github/ci.yaml in the calling repo:
+#
+#   zig-cache: false          # optional
+#   jobs:
+#     - recipe: test
+#     - recipe: check-target x86-linux   # a recipe may carry arguments
+#       blocking: false                  # stretch goal: shows, never fails CI
+#     - recipe: test
+#       runners: [macos-26]              # default is [ubuntu-26.04]
+#       blocking: false
+#
+# A `runners` list makes one job per runner. Without the file, the inputs
+# below apply, and the default is one job that runs `just ci`.
 #
 # Nix is installed with the Cachix installer, pinned to one release so CI
 # cannot drift from a new stable. Builds pull from the baskingspot Cachix
@@ -11,19 +26,19 @@ on:
   workflow_call:
     inputs:
       recipes:
-        description: A JSON array of just recipes, each with its arguments if it takes any, such as "check TARGET". Each entry is a separate job, and they run in parallel.
+        description: Used only when the repo has no .github/ci.yaml. A JSON array of just recipes, each with its arguments if it takes any, such as "check TARGET". Each entry is a separate job, and they run in parallel.
         type: string
         default: '["ci"]'
       runners:
-        description: A JSON array of runner labels. Every recipe runs once on each, in parallel.
+        description: Used only when the repo has no .github/ci.yaml. A JSON array of runner labels. Every recipe runs once on each, in parallel.
         type: string
         default: '["ubuntu-26.04"]'
       non-blocking:
-        description: A JSON array of entries from recipes that may fail without failing the run, for targets that are not first class. They still run and still show.
+        description: Used only when the repo has no .github/ci.yaml. A JSON array of entries from recipes that may fail without failing the run, for targets that are not first class. They still run and still show.
         type: string
         default: "[]"
       zig-cache:
-        description: Keep the Zig build cache between runs. It hits only on the same CPU model for a native build, so measure it. A run on the default branch saves it, and every run restores the newest one.
+        description: Keep the Zig build cache between runs. `zig-cache` in .github/ci.yaml does the same. It hits only on the same CPU model for a native build, so measure it. A run on the default branch saves it, and every run restores the newest one.
         type: boolean
         default: false
     secrets:
@@ -37,16 +52,62 @@ on:
 permissions: {}
 
 jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      zig-cache: ${{ steps.plan.outputs.zig-cache }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/ci.yaml
+          sparse-checkout-cone-mode: false
+      - name: Plan the jobs
+        id: plan
+        run: |
+          set -euo pipefail
+          if [ -f .github/ci.yaml ]; then
+            config=$(yq -o=json '.' .github/ci.yaml)
+            matrix=$(jq -c '
+              (.jobs // error("ci.yaml needs a jobs list")) as $jobs
+              | if ($jobs | type) != "array" or ($jobs | length) == 0 then error("jobs must be a non-empty list") else . end
+              | ([$jobs[] | keys[]] | unique - ["recipe", "runners", "blocking"]) as $extra
+              | if ($extra | length) > 0 then error("unknown job keys: " + ($extra | join(", "))) else . end
+              | [ $jobs[] as $j
+                  | (if ($j.recipe | type) != "string" then error("every job needs a recipe string") else . end)
+                  | (if ($j | has("blocking")) and (($j.blocking | type) != "boolean") then error("blocking must be true or false") else . end)
+                  | ($j.runners // ["ubuntu-26.04"])[] as $runner
+                  | { recipe: $j.recipe, runner: $runner, blocking: (if $j | has("blocking") then $j.blocking else true end) } ]
+            ' <<< "${config}")
+            zig_cache=$(jq -r '."zig-cache" // false' <<< "${config}")
+          else
+            matrix=$(jq -nc --argjson recipes "${RECIPES}" --argjson runners "${RUNNERS}" --argjson nonblocking "${NON_BLOCKING}" \
+              '[ $recipes[] as $recipe | $runners[] as $runner
+                 | { recipe: $recipe, runner: $runner, blocking: (($nonblocking | index($recipe)) == null) } ]')
+            zig_cache=false
+          fi
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+          echo "zig-cache=${zig_cache}" >> "${GITHUB_OUTPUT}"
+          jq -r '.[] | "\(.recipe) on \(.runner)" + (if .blocking then "" else " (non-blocking)" end)' <<< "${matrix}"
+        env:
+          RECIPES: ${{ inputs.recipes || '["ci"]' }}
+          RUNNERS: ${{ inputs.runners || '["ubuntu-26.04"]' }}
+          NON_BLOCKING: ${{ inputs.non-blocking || '[]' }}
+
   ci:
+    needs: plan
     name: ${{ matrix.recipe }} (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
-    continue-on-error: ${{ contains(fromJSON(inputs.non-blocking || '[]'), matrix.recipe) }}
+    continue-on-error: ${{ !matrix.blocking }}
     strategy:
-      # One runner's failure must not hide the others.
+      # One job's failure must not hide the others.
       fail-fast: false
       matrix:
-        recipe: ${{ fromJSON(inputs.recipes || '["ci"]') }}
-        runner: ${{ fromJSON(inputs.runners || '["ubuntu-26.04"]') }}
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     permissions:
       contents: read
     steps:
@@ -64,7 +125,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: ${{ github.ref != 'refs/heads/main' }}
       - name: Restore the Zig cache
-        if: inputs.zig-cache
+        if: inputs.zig-cache || needs.plan.outputs.zig-cache == 'true'
         id: zig-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -82,7 +143,7 @@ jobs:
         env:
           RECIPE: ${{ matrix.recipe }}
       - name: Save the Zig cache
-        if: inputs.zig-cache && github.ref == 'refs/heads/main' && steps.zig-cache.outputs.cache-hit != 'true'
+        if: (inputs.zig-cache || needs.plan.outputs.zig-cache == 'true') && github.ref == 'refs/heads/main' && steps.zig-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
