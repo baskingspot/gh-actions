@@ -12,7 +12,7 @@ lint:
     nix fmt -- --ci
     shfmt -d scripts
     shellcheck scripts/*.sh
-    oxfmt --check README.md AGENTS.md
+    oxfmt --check README.md AGENTS.md .github
     actionlint
     zizmor .
     just --fmt --check
@@ -22,7 +22,7 @@ lint:
 fmt:
     nix fmt
     shfmt -w scripts
-    oxfmt README.md AGENTS.md
+    oxfmt README.md AGENTS.md .github
     just --fmt
 
 [doc("Run the tests for the maintenance scripts, which need no network")]
