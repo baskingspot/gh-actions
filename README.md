@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-Shared workflows for baskingspot, and the job that keeps every org repo current.
+Shared GitHub Actions workflows for baskingspot, and the job that keeps every org repo current.
 
 Every repo in the org has the same shape: a Nix flake, a justfile with a `ci` recipe, and workflows pinned by SHA. This repo holds the workflows they share and the job that keeps them up to date.
 
@@ -84,3 +84,9 @@ The job reads the App's client ID from the org variable `APP_CLIENT_ID` and its 
 ## License
 
 MIT. See `LICENSE`. The logo files in `docs/static/` are baskingspot marks and are not covered by it. See `docs/static/LICENSE`.
+
+## How it's made
+
+Built with LLM assistance. [How, in detail](https://github.com/baskingspot/.github/blob/main/docs/AI.md).
+
+<a href="https://github.com/baskingspot"><img src="https://raw.githubusercontent.com/baskingspot/.github/main/brand/assets/badge.svg" alt="baskingspot" height="24"></a>
