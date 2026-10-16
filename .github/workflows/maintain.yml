@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           include='[]'
           repos=$(gh api --paginate "orgs/${OWNER}/repos?type=all&per_page=100" \
-            --jq '.[] | select((.archived | not) and (.fork | not)) | .name')
+            --jq '.[] | select((.archived | not) and (.fork | not) and ((.topics // []) | index("no-maintenance") | not)) | .name')
           for repo in $repos; do
             if [ -n "${ONLY}" ] && [ "${repo}" != "${ONLY}" ]; then
               continue
