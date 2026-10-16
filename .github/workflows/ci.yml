@@ -14,6 +14,10 @@ on:
         description: The just recipe to run.
         type: string
         default: ci
+      runners:
+        description: A JSON array of runner labels. The recipe runs once on each, in parallel.
+        type: string
+        default: '["ubuntu-26.04"]'
     secrets:
       CACHIX_AUTH_TOKEN:
         description: Write token for the baskingspot Cachix cache.
@@ -26,7 +30,13 @@ permissions: {}
 
 jobs:
   ci:
-    runs-on: ubuntu-26.04
+    name: ci (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # One runner's failure must not hide the others.
+      fail-fast: false
+      matrix:
+        runner: ${{ fromJSON(inputs.runners || '["ubuntu-26.04"]') }}
     permissions:
       contents: read
     steps:

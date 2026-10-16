@@ -37,6 +37,15 @@ jobs:
 
 `CACHIX_AUTH_TOKEN` is an org secret, visible to every repo. A workflow that calls another one does not pass secrets on its own, so the call lists it. Without it the run still works, and only reads the cache.
 
+To run the recipe on more than one runner, pass `runners`, a JSON array of labels. Each label is a separate job, and they run in parallel. All of these are free on a public repo:
+
+```yaml
+with:
+  runners: '["ubuntu-26.04", "ubuntu-26.04-arm", "macos-26"]'
+```
+
+`ubuntu-26.04` is x86_64 Linux, `ubuntu-26.04-arm` is arm64 Linux, and `macos-26` is arm64 macOS. The default is `["ubuntu-26.04"]`. A repo only lists the runners where its recipe can pass: tools that exist only on Linux, like `perf`, fail on macOS.
+
 Pin the call by commit SHA. The maintenance job moves the pin when this repo changes.
 
 ## Keeping repos current
