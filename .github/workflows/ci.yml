@@ -19,7 +19,7 @@ on:
         type: string
         default: '["ubuntu-26.04"]'
       zig-cache:
-        description: Keep the Zig build cache between runs. A run on the default branch saves it, and every run restores the newest one.
+        description: Keep the Zig build cache between runs. It hits only on the same CPU model for a native build, so measure it. A run on the default branch saves it, and every run restores the newest one.
         type: boolean
         default: false
     secrets:

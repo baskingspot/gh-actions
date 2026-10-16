@@ -58,7 +58,7 @@ A recipe may carry arguments: `'["check x86_64-linux", "check wasm32-wasi"]'` ru
 
 Recipes and runners multiply: three recipes on two runners is six jobs. The default is `["ci"]`. The jobs are named `<recipe> (<runner>)`.
 
-For a Zig repo, pass `zig-cache: true`. The job restores `~/.cache/zig` and `.zig-cache` from the newest saved cache for that recipe and runner, and a run on the default branch saves a new one. A pull request reads the cache and never writes it. The cache is keyed by recipe, so each parallel job keeps its own.
+For a Zig repo, pass `zig-cache: true` to try the build cache. Measure it before you keep it. A build for the `native` CPU is keyed on the runner's CPU model, and GitHub's runners are a mix, so the cache hits only when a run lands on the same kind of machine. On stdx it helped `doc` and `test-release-fast` a little and did nothing for `test-release-safe`. The job restores `~/.cache/zig` and `.zig-cache` from the newest saved cache for that recipe and runner, and a run on the default branch saves a new one. A pull request reads the cache and never writes it. The cache is keyed by recipe, so each parallel job keeps its own.
 
 Pin the call by commit SHA. The maintenance job moves the pin when this repo changes.
 
