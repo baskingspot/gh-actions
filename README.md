@@ -54,7 +54,11 @@ with:
   recipes: '["test", "lint", "doc"]'
 ```
 
+A recipe may carry arguments: `'["check x86_64-linux", "check wasm32-wasi"]'` runs `just check x86_64-linux` and `just check wasm32-wasi` as two jobs. This is how one slow recipe, such as a cross-target compile gate, becomes a job per target.
+
 Recipes and runners multiply: three recipes on two runners is six jobs. The default is `["ci"]`. The jobs are named `<recipe> (<runner>)`.
+
+For a Zig repo, pass `zig-cache: true`. The job restores `~/.cache/zig` and `.zig-cache` from the newest saved cache for that recipe and runner, and a run on the default branch saves a new one. A pull request reads the cache and never writes it. The cache is keyed by recipe, so each parallel job keeps its own.
 
 Pin the call by commit SHA. The maintenance job moves the pin when this repo changes.
 

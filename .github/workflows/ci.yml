@@ -11,13 +11,17 @@ on:
   workflow_call:
     inputs:
       recipes:
-        description: A JSON array of just recipes. Each recipe is a separate job, and they run in parallel.
+        description: A JSON array of just recipes, each with its arguments if it takes any, such as "check TARGET". Each entry is a separate job, and they run in parallel.
         type: string
         default: '["ci"]'
       runners:
         description: A JSON array of runner labels. Every recipe runs once on each, in parallel.
         type: string
         default: '["ubuntu-26.04"]'
+      zig-cache:
+        description: Keep the Zig build cache between runs. A run on the default branch saves it, and every run restores the newest one.
+        type: boolean
+        default: false
     secrets:
       CACHIX_AUTH_TOKEN:
         description: Write token for the baskingspot Cachix cache.
@@ -54,7 +58,29 @@ jobs:
           extraPullNames: mattrobenolt
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: ${{ github.ref != 'refs/heads/main' }}
+      - name: Restore the Zig cache
+        if: inputs.zig-cache
+        id: zig-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/zig
+            .zig-cache
+          key: zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.recipe }}-${{ github.sha }}
+          restore-keys: |
+            zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.recipe }}-
       - name: Run the recipe
-        run: nix develop --command just "$RECIPE"
+        # The recipe may carry arguments, so split it into words.
+        run: |
+          read -r -a recipe <<< "$RECIPE"
+          nix develop --command just "${recipe[@]}"
         env:
           RECIPE: ${{ matrix.recipe }}
+      - name: Save the Zig cache
+        if: inputs.zig-cache && github.ref == 'refs/heads/main' && steps.zig-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/zig
+            .zig-cache
+          key: zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.recipe }}-${{ github.sha }}
