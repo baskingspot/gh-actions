@@ -28,6 +28,7 @@ cmp "${tgz}" "${again}"
 # A windows asset is a zip, and an exe keeps its name.
 rm "${work}/prefix/bin/tool"
 printf 'exe' >"${work}/prefix/bin/tool.exe"
+printf 'symbols' >"${work}/prefix/bin/tool.pdb"
 zipfile=$(SOURCE_DATE_EPOCH=1000 "${here}/package.sh" tool v1.2.3 windows-x64 "${work}/prefix" "${work}/out" "${work}/LICENSE")
 test "${zipfile}" = "${work}/out/tool-v1.2.3-windows-x64.zip"
 python3 - "${zipfile}" <<'PY'
@@ -35,6 +36,7 @@ import sys, zipfile
 names = zipfile.ZipFile(sys.argv[1]).namelist()
 assert "tool-v1.2.3-windows-x64/tool.exe" in names, names
 assert "tool-v1.2.3-windows-x64/LICENSE" in names, names
+assert not any(n.endswith(".pdb") for n in names), names
 PY
 
 # An empty prefix, or a missing license, stops the release.

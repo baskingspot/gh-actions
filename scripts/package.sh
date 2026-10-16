@@ -12,7 +12,7 @@
 #     zigdoc-v1.2.3-linux-x64/zigdoc
 #     zigdoc-v1.2.3-linux-x64/LICENSE
 #
-# A windows-* ASSET is a .zip, and every other ASSET is a .tar.gz. The archive
+# Debug symbols (*.pdb) are left out. A windows-* ASSET is a .zip, and every other ASSET is a .tar.gz. The archive
 # is reproducible: file order, owners, and times are fixed. Set
 # SOURCE_DATE_EPOCH to the release commit's time. Needs GNU tar, gzip, zip.
 
@@ -28,8 +28,15 @@ license=${6:-LICENSE}
 name="${binary}-${tag}-${asset}"
 epoch=${SOURCE_DATE_EPOCH:-0}
 
+# Debug symbols (a Windows .pdb) are not shipped.
 shopt -s nullglob
-files=("${src}"/bin/*)
+files=()
+for file in "${src}"/bin/*; do
+	case "${file}" in
+	*.pdb) ;;
+	*) files+=("${file}") ;;
+	esac
+done
 if [ "${#files[@]}" -eq 0 ]; then
 	echo "package: ${src}/bin has no files. release-build must install into the prefix it is given." >&2
 	exit 1
