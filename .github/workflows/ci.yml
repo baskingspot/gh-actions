@@ -10,12 +10,12 @@ name: ci
 on:
   workflow_call:
     inputs:
-      recipe:
-        description: The just recipe to run.
+      recipes:
+        description: A JSON array of just recipes. Each recipe is a separate job, and they run in parallel.
         type: string
-        default: ci
+        default: '["ci"]'
       runners:
-        description: A JSON array of runner labels. The recipe runs once on each, in parallel.
+        description: A JSON array of runner labels. Every recipe runs once on each, in parallel.
         type: string
         default: '["ubuntu-26.04"]'
     secrets:
@@ -30,12 +30,13 @@ permissions: {}
 
 jobs:
   ci:
-    name: ci (${{ matrix.runner }})
+    name: ${{ matrix.recipe }} (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
     strategy:
       # One runner's failure must not hide the others.
       fail-fast: false
       matrix:
+        recipe: ${{ fromJSON(inputs.recipes || '["ci"]') }}
         runner: ${{ fromJSON(inputs.runners || '["ubuntu-26.04"]') }}
     permissions:
       contents: read
@@ -56,4 +57,4 @@ jobs:
       - name: Run the recipe
         run: nix develop --command just "$RECIPE"
         env:
-          RECIPE: ${{ inputs.recipe || 'ci' }}
+          RECIPE: ${{ matrix.recipe }}

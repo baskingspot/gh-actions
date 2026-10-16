@@ -1,0 +1,64 @@
+name: deploy-docs
+
+# Deploys a repo's docs site to its Cloudflare Worker. The repo's `doc-deploy`
+# recipe builds the site and runs `wrangler deploy`. The token is scoped to
+# that one Worker, and Terraform in baskingspot/site put it in the repo's
+# secrets.
+#
+# A caller gates the job on its `CLOUDFLARE_ACCOUNT_ID` variable, which
+# Terraform also sets, so the job is skipped until the site is registered:
+#
+#   deploy:
+#     needs: ci
+#     if: github.ref == 'refs/heads/main' && vars.CLOUDFLARE_ACCOUNT_ID != ''
+#     permissions:
+#       contents: read
+#     uses: baskingspot/gh-actions/.github/workflows/deploy-docs.yml@COMMIT # vX.Y.Z
+#     with:
+#       account-id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+#     secrets:
+#       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+on:
+  workflow_call:
+    inputs:
+      recipe:
+        description: The just recipe that builds the site and deploys it.
+        type: string
+        default: doc-deploy
+      account-id:
+        description: The Cloudflare account ID, from the repo's CLOUDFLARE_ACCOUNT_ID variable.
+        type: string
+        required: true
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        description: A token that can deploy this repo's Worker only.
+        required: true
+
+permissions: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    concurrency:
+      group: deploy-docs
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.35.3/install
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: baskingspot
+          extraPullNames: mattrobenolt
+          skipPush: true
+      - name: Build and deploy the site
+        run: nix develop --command just "$RECIPE"
+        env:
+          RECIPE: ${{ inputs.recipe }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ inputs.account-id }}

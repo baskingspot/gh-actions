@@ -11,7 +11,8 @@ Every repo in the org has the same shape: a Nix flake, a justfile with a `ci` re
 
 ## Workflows
 
-- `ci.yml` runs a repo's `just ci` recipe inside its Nix devshell. It installs Nix 2.35.3 with the Cachix installer and uses the `baskingspot` Cachix cache, and also pulls from `mattrobenolt`, where `ziglint` and `zigdoc` are prebuilt until they move under the org. A run on the default branch pushes new store paths to the cache. A pull request only reads from it. Pass `recipe` to run another recipe.
+- `ci.yml` runs a repo's `just ci` recipe inside its Nix devshell. It installs Nix 2.35.3 with the Cachix installer and uses the `baskingspot` Cachix cache, and also pulls from `mattrobenolt`, where `ziglint` and `zigdoc` are prebuilt until they move under the org. A run on the default branch pushes new store paths to the cache. A pull request only reads from it. Pass `recipes` to run others.
+- `deploy-docs.yml` builds a repo's docs site and deploys it to the repo's Cloudflare Worker, with the repo's `doc-deploy` recipe. The token is scoped to that Worker. See the header of the file for the caller.
 - `zizmor.yml` audits the repo's workflows and uploads the findings to the Security tab.
 
 A repo calls them like this:
@@ -45,6 +46,15 @@ with:
 ```
 
 `ubuntu-26.04` is x86_64 Linux, `ubuntu-26.04-arm` is arm64 Linux, and `macos-26` is arm64 macOS. The default is `["ubuntu-26.04"]`. A repo only lists the runners where its recipe can pass: tools that exist only on Linux, like `perf`, fail on macOS.
+
+To run more than one recipe, pass `recipes`, a JSON array. Each recipe is its own job, so tests, lint, and a docs build run at the same time. Each job installs Nix, which takes about 10 s with the Cachix cache, so split a recipe only when it is longer than that. `ci` stays the recipe a person runs locally to get everything:
+
+```yaml
+with:
+  recipes: '["test", "lint", "doc"]'
+```
+
+Recipes and runners multiply: three recipes on two runners is six jobs. The default is `["ci"]`. The jobs are named `<recipe> (<runner>)`.
 
 Pin the call by commit SHA. The maintenance job moves the pin when this repo changes.
 
