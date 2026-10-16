@@ -117,7 +117,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
       - name: Bundle
-        uses: baskingspot/gh-actions/actions/package@738886273f078800612cbd260f594193fbe549af # main
+        uses: baskingspot/gh-actions/actions/package@95e4edeed703625f9fc6ac5b5413cb6cde7a06e5 # main
         with:
           binary: ${{ needs.plan.outputs.binary }}
           tag: ${{ github.ref_name }}
