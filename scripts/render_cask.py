@@ -105,7 +105,11 @@ def render(program: Program, tag: str, sums: dict[str, str]) -> str:
 
     def block(os_name: str) -> list[str]:
         lines: list[str] = []
-        for target in (t for t in program.targets if t.os == os_name):
+        # Homebrew orders on_arm before on_intel.
+        for target in sorted(
+            (t for t in program.targets if t.os == os_name),
+            key=lambda t: t.cpu != "arm",
+        ):
             file = f"{binary}-{tag}-{target.asset}.tar.gz"
             if file not in sums:
                 raise ValueError(f"{program.repo} {tag} has no checksum for {file}")
@@ -117,14 +121,18 @@ def render(program: Program, tag: str, sums: dict[str, str]) -> str:
                 f'      binary "{folder}/{binary}"',
                 "    end",
             ]
-        return [f"  on_{os_name} do", *lines, "  end", ""] if lines else []
+        return [f"  on_{os_name} do", *lines, "  end"] if lines else []
 
     depends = [f'  depends_on formula: "{name}"' for name in program.requires]
+    # The on_macos and on_linux blocks are one group: no blank line between.
+    platforms = [*block("macos"), *block("linux")]
+    platforms = [*platforms, ""] if platforms else []
     body = [
         f"{MARKER} Do not edit.",
         f'cask "{program.repo}" do',
         f'  version "{version}"',
         "",
+        *platforms,
         f'  name "{program.repo}"',
         f'  desc "{program.description}"',
         f'  homepage "{program.homepage}"',
@@ -135,8 +143,6 @@ def render(program: Program, tag: str, sums: dict[str, str]) -> str:
         "  end",
         "",
         *([*depends, ""] if depends else []),
-        *block("macos"),
-        *block("linux"),
         "  # The release binaries are not signed or notarized, so macOS quarantines them.",
         "  postflight_steps do",
         "    on_macos do",

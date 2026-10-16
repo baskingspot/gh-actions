@@ -31,12 +31,29 @@ class RenderTest(unittest.TestCase):
         for char in "abc":
             self.assertIn(f'sha256 "{char * 64}"', cask)
         self.assertIn("on_macos do\n    on_arm do", cask)
-        self.assertIn("on_linux do\n    on_intel do", cask)
+        self.assertIn("on_linux do\n    on_arm do", cask)
         self.assertIn('binary "zigdoc-v#{version}-macos-arm64/zigdoc"', cask)
 
     def test_the_hash_comes_before_the_url_as_homebrew_orders_them(self) -> None:
         cask = rc.render(PROGRAM, "v1.2.3", SUMS)
         self.assertLess(cask.index("sha256"), cask.index("      url"))
+
+    def test_stanzas_follow_homebrews_order(self) -> None:
+        cask = rc.render(PROGRAM, "v1.2.3", SUMS)
+        order = [
+            cask.index(x)
+            for x in (
+                'version "',
+                "on_macos",
+                "on_linux",
+                "  name ",
+                "  desc ",
+                "livecheck",
+            )
+        ]
+        self.assertEqual(order, sorted(order))
+        self.assertLess(cask.index("on_arm"), cask.index("on_intel"))
+        self.assertNotIn("  end\n\n  on_linux", cask)
 
     def test_the_url_follows_the_version(self) -> None:
         cask = rc.render(PROGRAM, "v1.2.3", SUMS)
