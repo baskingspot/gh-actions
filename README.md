@@ -103,7 +103,7 @@ Pin the call by commit SHA. The maintenance job moves the pin when this repo cha
 
 ## Keeping repos current
 
-`maintain.yml` runs every Monday at 05:23 UTC. It lists the org's repos, skipping archived repos, forks, and any repo with the topic `no-maintenance`, which a repo that has to stay identical to someone else's gets. For each repo it runs up to three updates, one repo at a time:
+`maintain.yml` runs every Monday at 05:23 UTC. It lists the org's repos, skipping archived repos, forks, and any repo whose `stage` property is not `stable`: `incubating` repos are being hacked on, and `mirror` repos have to stay identical to someone else's. For each repo it runs up to three updates, one repo at a time:
 
 - `flake.lock: update inputs`, for a repo that has a `flake.lock`. The commit message shows what moved.
 - `ci: update pinned actions`, for a repo with workflows. It runs `pinact run --update`. Actions from other owners must be at least three days old. Our own `baskingspot/` actions skip that rule, so a release of a shared workflow reaches every repo at once.
