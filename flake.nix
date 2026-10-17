@@ -27,7 +27,6 @@
 
             packages = with pkgs; [
               jq
-              oxfmt
               perl
               python3
               ruff
