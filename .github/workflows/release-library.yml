@@ -99,17 +99,66 @@ jobs:
           open(path, "w", encoding="utf-8").write(updated)
           PY
 
-      - name: Commit, tag, and push
+      - name: Point the install command at the tag
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          git config user.name "baskingspot release"
-          git config user.email "release@baskingspot.dev"
-          git add CHANGELOG.md build.zig.zon
-          git commit -m "release: v${VERSION}"
-          git tag -a "v${VERSION}" -m "v${VERSION}"
-          git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" "HEAD:${GITHUB_REF_NAME}" "v${VERSION}"
+          python3 - <<'PY'
+          import os, re
+          repo = os.environ["GITHUB_REPOSITORY"]
+          version = os.environ["VERSION"]
+          url = f"git+https://github.com/{repo}"
+          for path in ("README.md", "docs/content/_index.md"):
+              try:
+                  text = open(path, encoding="utf-8").read()
+              except FileNotFoundError:
+                  continue
+              lines = []
+              for line in text.splitlines(keepends=True):
+                  if "zig fetch --save" in line:
+                      line = re.sub(
+                          rf"{re.escape(url)}(?:#v[0-9]+\.[0-9]+\.[0-9]+)?",
+                          f"{url}#v{version}",
+                          line,
+                      )
+                  lines.append(line)
+              open(path, "w", encoding="utf-8").write("".join(lines))
+          PY
+
+      - name: Commit through the API
+        id: commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          head=$(git rev-parse HEAD)
+          additions='[]'
+          while IFS= read -r path; do
+            additions=$(jq -c --arg p "${path}" --arg c "$(base64 -w0 "${path}")" \
+              '. + [{path: $p, contents: $c}]' <<< "${additions}")
+          done < <(git diff --name-only)
+          if [ "${additions}" = '[]' ]; then
+            echo "nothing changed; refusing an empty release commit" >&2
+            exit 1
+          fi
+          sha=$(jq -n \
+            --arg repo "${GITHUB_REPOSITORY}" --arg branch "${GITHUB_REF_NAME}" \
+            --arg head "${head}" --arg headline "release: v${VERSION}" \
+            --argjson additions "${additions}" \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid url } } }",
+              variables: { input: {
+                branch: { repositoryNameWithOwner: $repo, branchName: $branch },
+                message: { headline: $headline },
+                fileChanges: { additions: $additions },
+                expectedHeadOid: $head
+              } }
+            }' | gh api graphql --input - --jq '.data.createCommitOnBranch.commit.oid')
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            --field ref="refs/tags/v${VERSION}" --field sha="${sha}" > /dev/null
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Open the release
         env:
