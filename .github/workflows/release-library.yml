@@ -75,7 +75,7 @@ jobs:
           if not body.strip():
               sys.exit("the Unreleased section is empty")
           date = datetime.date.today().isoformat()
-          stamped = f"{before}## [Unreleased]\n\n## [{version}] - {date}\n{body.lstrip(chr(10))}"
+          stamped = f"{before}## [Unreleased]\n\n## [{version}] - {date}\n\n{body.lstrip(chr(10))}"
           if tail:
               stamped += "\n" + tail
           open(path, "w", encoding="utf-8").write(stamped)
