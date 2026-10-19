@@ -1,0 +1,120 @@
+name: release-library
+
+# Tags a library release. A library ships source only: no binary, no
+# attestation, no install channel. The caller is a `workflow_dispatch` with a
+# `version` input and `contents: write`; see the README.
+#
+# The release is the changelog. The workflow moves the `[Unreleased]` section
+# of CHANGELOG.md into a dated heading, sets the version in build.zig.zon,
+# commits, tags, and opens the GitHub release with that section as its body.
+# Nothing is tagged by hand.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version without the leading v, such as 0.2.0. It must not exist as a tag.
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the version and the changelog
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if ! grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' <<< "${VERSION}"; then
+            echo "version must look like 0.2.0, got ${VERSION}" >&2
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "tag v${VERSION} already exists" >&2
+            exit 1
+          fi
+          if [ ! -f CHANGELOG.md ]; then
+            echo "CHANGELOG.md is missing" >&2
+            exit 1
+          fi
+          if [ ! -f build.zig.zon ]; then
+            echo "build.zig.zon is missing" >&2
+            exit 1
+          fi
+
+      - name: Stamp the changelog
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/notes.md"
+          import datetime, os, re, sys
+          version = os.environ["VERSION"]
+          path = "CHANGELOG.md"
+          text = open(path, encoding="utf-8").read()
+          match = re.search(r"^## \[Unreleased\][^\n]*\n", text, re.M)
+          if match is None:
+              sys.exit("CHANGELOG.md has no `## [Unreleased]` heading")
+          before, rest = text[: match.start()], text[match.end() :]
+          following = re.search(r"^## \[", rest, re.M)
+          body = rest[: following.start()] if following else rest
+          tail = rest[following.start() :] if following else ""
+          if not body.strip():
+              sys.exit("the Unreleased section is empty")
+          date = datetime.date.today().isoformat()
+          stamped = f"{before}## [Unreleased]\n\n## [{version}] - {date}\n{body.lstrip(chr(10))}"
+          if tail:
+              stamped += "\n" + tail
+          open(path, "w", encoding="utf-8").write(stamped)
+          sys.stdout.write(body.strip() + "\n")
+          PY
+          test -s "${RUNNER_TEMP}/notes.md" || { echo "empty release notes" >&2; exit 1; }
+
+      - name: Set the manifest version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re, sys
+          version = os.environ["VERSION"]
+          path = "build.zig.zon"
+          text = open(path, encoding="utf-8").read()
+          updated, count = re.subn(r'^(\s*)\.version = "[^"]*"', rf'\1.version = "{version}"', text, count=1, flags=re.M)
+          if count != 1:
+              sys.exit("build.zig.zon has no .version field")
+          open(path, "w", encoding="utf-8").write(updated)
+          PY
+
+      - name: Commit, tag, and push
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "baskingspot release"
+          git config user.email "release@baskingspot.dev"
+          git add CHANGELOG.md build.zig.zon
+          git commit -m "release: v${VERSION}"
+          git tag -a "v${VERSION}" -m "v${VERSION}"
+          git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" "HEAD:${GITHUB_REF_NAME}" "v${VERSION}"
+
+      - name: Open the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md"
