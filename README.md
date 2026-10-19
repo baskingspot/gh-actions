@@ -53,9 +53,11 @@ jobs:
   - recipe: test
     runners: [macos-26] # the default is [ubuntu-26.04]
     blocking: false
+  - recipe: check-backend-boringssl
+    shell: boringssl # the default devshell is `default`
 ```
 
-Each entry is a job. `recipe` is a `just` recipe with its arguments. A `runners` list makes one job per runner. `blocking: false` marks a stretch goal. A short first job reads the file and plans the matrix, which takes about 10 seconds. The caller then needs no `with:` block:
+Each entry is a job. `recipe` is a `just` recipe with its arguments. A `runners` list makes one job per runner. `shell` names the devshell, for a job that needs its own, such as a backend that links a different TLS library. `blocking: false` marks a stretch goal. A short first job reads the file and plans the matrix, which takes about 10 seconds. The caller then needs no `with:` block:
 
 ```yaml
 jobs:

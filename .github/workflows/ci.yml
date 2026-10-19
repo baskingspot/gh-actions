@@ -14,6 +14,8 @@ name: ci
 #     - recipe: test
 #       runners: [macos-26]              # default is [ubuntu-26.04]
 #       blocking: false
+#     - recipe: check-backend-boringssl
+#       shell: boringssl                 # the default devshell is `default`
 #
 # A `runners` list makes one job per runner. Without the file, the inputs
 # below apply, and the default is one job that runs `just ci`.
@@ -75,19 +77,20 @@ jobs:
             matrix=$(jq -c '
               (.jobs // error("ci.yaml needs a jobs list")) as $jobs
               | if ($jobs | type) != "array" or ($jobs | length) == 0 then error("jobs must be a non-empty list") else . end
-              | ([$jobs[] | keys[]] | unique - ["recipe", "runners", "blocking"]) as $extra
+              | ([$jobs[] | keys[]] | unique - ["recipe", "runners", "blocking", "shell"]) as $extra
               | if ($extra | length) > 0 then error("unknown job keys: " + ($extra | join(", "))) else . end
               | [ $jobs[] as $j
                   | (if ($j.recipe | type) != "string" then error("every job needs a recipe string") else . end)
                   | (if ($j | has("blocking")) and (($j.blocking | type) != "boolean") then error("blocking must be true or false") else . end)
+                  | (if ($j | has("shell")) and (($j.shell | type) != "string") then error("shell must be a string") else . end)
                   | ($j.runners // ["ubuntu-26.04"])[] as $runner
-                  | { recipe: $j.recipe, runner: $runner, blocking: (if $j | has("blocking") then $j.blocking else true end) } ]
+                  | { recipe: $j.recipe, runner: $runner, shell: ($j.shell // "default"), blocking: (if $j | has("blocking") then $j.blocking else true end) } ]
             ' <<< "${config}")
             zig_cache=$(jq -r '."zig-cache" // false' <<< "${config}")
           else
             matrix=$(jq -nc --argjson recipes "${RECIPES}" --argjson runners "${RUNNERS}" --argjson nonblocking "${NON_BLOCKING}" \
               '[ $recipes[] as $recipe | $runners[] as $runner
-                 | { recipe: $recipe, runner: $runner, blocking: (($nonblocking | index($recipe)) == null) } ]')
+                 | { recipe: $recipe, runner: $runner, shell: "default", blocking: (($nonblocking | index($recipe)) == null) } ]')
             zig_cache=false
           fi
           echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
@@ -132,16 +135,17 @@ jobs:
           path: |
             ~/.cache/zig
             .zig-cache
-          key: zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.recipe }}-${{ github.sha }}
+          key: zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shell }}-${{ matrix.recipe }}-${{ github.sha }}
           restore-keys: |
-            zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.recipe }}-
+            zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shell }}-${{ matrix.recipe }}-
       - name: Run the recipe
         # The recipe may carry arguments, so split it into words.
         run: |
           read -r -a recipe <<< "$RECIPE"
-          nix develop --command just "${recipe[@]}"
+          nix develop ".#${DEVSHELL}" --command just "${recipe[@]}"
         env:
           RECIPE: ${{ matrix.recipe }}
+          DEVSHELL: ${{ matrix.shell }}
       - name: Save the Zig cache
         if: (inputs.zig-cache || needs.plan.outputs.zig-cache == 'true') && github.ref == 'refs/heads/main' && steps.zig-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -149,4 +153,4 @@ jobs:
           path: |
             ~/.cache/zig
             .zig-cache
-          key: zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.recipe }}-${{ github.sha }}
+          key: zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shell }}-${{ matrix.recipe }}-${{ github.sha }}
