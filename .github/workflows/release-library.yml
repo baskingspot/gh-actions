@@ -1,19 +1,20 @@
 name: release-library
 
-# Tags a library release. A library ships source only: no binary, no
-# attestation, no install channel. The caller is a `workflow_dispatch` with a
-# `version` input and `contents: write`; see the README.
+# Tags a library release and opens the GitHub release. A library ships source
+# only: no binary, no attestation, no install channel.
 #
-# The release is the changelog. The workflow moves the `[Unreleased]` section
-# of CHANGELOG.md into a dated heading, sets the version in build.zig.zon,
-# commits, tags, and opens the GitHub release with that section as its body.
-# Nothing is tagged by hand.
+# This workflow changes no files and makes no commit. The changelog section and
+# the version in build.zig.zon are prepared beforehand, committed and signed by
+# a person, and this tags that commit. `release-prep.py` does the preparation.
+#
+# The caller is a `workflow_dispatch` with a `version` input and
+# `contents: write`; see the README.
 
 on:
   workflow_call:
     inputs:
       version:
-        description: The version without the leading v, such as 0.2.0. It must not exist as a tag.
+        description: The version without the leading v, such as 0.2.0. The changelog must already have a `## [X.Y.Z]` section, and build.zig.zon must name it.
         type: string
         required: true
 
@@ -46,116 +47,38 @@ jobs:
             echo "tag v${VERSION} already exists" >&2
             exit 1
           fi
-          if [ ! -f CHANGELOG.md ]; then
-            echo "CHANGELOG.md is missing" >&2
+          if ! grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "CHANGELOG.md has no \`## [${VERSION}]\` section; run release-prep.py first" >&2
             exit 1
           fi
-          if [ ! -f build.zig.zon ]; then
-            echo "build.zig.zon is missing" >&2
+          if ! grep -Eq "^[[:space:]]*\.version = \"${VERSION}\"" build.zig.zon; then
+            echo "build.zig.zon does not name version ${VERSION}" >&2
             exit 1
           fi
 
-      - name: Stamp the changelog
+      - name: Extract the release notes
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          python3 - <<'PY' > "${RUNNER_TEMP}/notes.md"
-          import datetime, os, re, sys
-          version = os.environ["VERSION"]
-          path = "CHANGELOG.md"
-          text = open(path, encoding="utf-8").read()
-          match = re.search(r"^## \[Unreleased\][^\n]*\n", text, re.M)
-          if match is None:
-              sys.exit("CHANGELOG.md has no `## [Unreleased]` heading")
-          before, rest = text[: match.start()], text[match.end() :]
-          following = re.search(r"^## \[", rest, re.M)
-          body = rest[: following.start()] if following else rest
-          tail = rest[following.start() :] if following else ""
-          if not body.strip():
-              sys.exit("the Unreleased section is empty")
-          date = datetime.date.today().isoformat()
-          stamped = f"{before}## [Unreleased]\n\n## [{version}] - {date}\n\n{body.strip()}\n"
-          if tail:
-              stamped += "\n" + tail
-          open(path, "w", encoding="utf-8").write(stamped)
-          sys.stdout.write(body.strip() + "\n")
-          PY
-          test -s "${RUNNER_TEMP}/notes.md" || { echo "empty release notes" >&2; exit 1; }
+          awk -v version="${VERSION}" '
+            $0 ~ "^## \\[" version "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md | sed '/./,$!d' > "${RUNNER_TEMP}/notes.md"
+          if [ ! -s "${RUNNER_TEMP}/notes.md" ]; then
+            echo "the ${VERSION} section is empty" >&2
+            exit 1
+          fi
 
-      - name: Set the manifest version
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os, re, sys
-          version = os.environ["VERSION"]
-          path = "build.zig.zon"
-          text = open(path, encoding="utf-8").read()
-          updated, count = re.subn(r'^(\s*)\.version = "[^"]*"', rf'\1.version = "{version}"', text, count=1, flags=re.M)
-          if count != 1:
-              sys.exit("build.zig.zon has no .version field")
-          open(path, "w", encoding="utf-8").write(updated)
-          PY
-
-      - name: Point the install command at the tag
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os, re
-          repo = os.environ["GITHUB_REPOSITORY"]
-          version = os.environ["VERSION"]
-          archive = f"https://github.com/{repo}/archive/refs/tags/v{version}.tar.gz"
-          url = re.compile(rf"(?:git\+)?https://github\.com/{re.escape(repo)}(?:[#/][^\s`\"']*)?")
-          for path in ("README.md", "docs/content/_index.md"):
-              try:
-                  text = open(path, encoding="utf-8").read()
-              except FileNotFoundError:
-                  continue
-              lines = []
-              for line in text.splitlines(keepends=True):
-                  if "zig fetch --save" in line:
-                      line = url.sub(archive, line)
-                  lines.append(line)
-              open(path, "w", encoding="utf-8").write("".join(lines))
-          PY
-
-      - name: Commit through the API
-        id: commit
+      - name: Create the tag
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          head=$(git rev-parse HEAD)
-          additions='[]'
-          while IFS= read -r path; do
-            additions=$(jq -c --arg p "${path}" --arg c "$(base64 -w0 "${path}")" \
-              '. + [{path: $p, contents: $c}]' <<< "${additions}")
-          done < <(git diff --name-only)
-          if [ "${additions}" = '[]' ]; then
-            echo "nothing changed; refusing an empty release commit" >&2
-            exit 1
-          fi
-          sha=$(jq -n \
-            --arg repo "${GITHUB_REPOSITORY}" --arg branch "${GITHUB_REF_NAME}" \
-            --arg head "${head}" --arg headline "release: v${VERSION}" \
-            --argjson additions "${additions}" \
-            '{
-              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid url } } }",
-              variables: { input: {
-                branch: { repositoryNameWithOwner: $repo, branchName: $branch },
-                message: { headline: $headline },
-                fileChanges: { additions: $additions },
-                expectedHeadOid: $head
-              } }
-            }' | gh api graphql --input - --jq '.data.createCommitOnBranch.commit.oid')
           gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-            --field ref="refs/tags/v${VERSION}" --field sha="${sha}" > /dev/null
-          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+            --field ref="refs/tags/v${VERSION}" --field sha="$(git rev-parse HEAD)" > /dev/null
 
       - name: Open the release
         env:
