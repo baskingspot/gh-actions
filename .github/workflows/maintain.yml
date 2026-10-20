@@ -66,6 +66,9 @@ jobs:
             if gh api "repos/${OWNER}/${repo}/contents/Dockerfile" > /dev/null 2>&1; then
               include=$(jq -c --arg r "${repo}" '. + [{repo: $r, task: "images"}]' <<< "${include}")
             fi
+            if gh api "repos/${OWNER}/${repo}/contents/build.zig.zon" > /dev/null 2>&1; then
+              include=$(jq -c --arg r "${repo}" '. + [{repo: $r, task: "deps"}]' <<< "${include}")
+            fi
           done
           echo "matrix=${include}" >> "${GITHUB_OUTPUT}"
           echo "${include}" | jq .
@@ -92,7 +95,7 @@ jobs:
       # Two token steps, so the pin job alone gets the workflows permission.
       - name: Mint a token to update flake.lock or pinned images
         id: token-flake
-        if: matrix.task == 'flake' || matrix.task == 'images'
+        if: matrix.task == 'flake' || matrix.task == 'images' || matrix.task == 'deps'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.APP_CLIENT_ID }}
@@ -114,6 +117,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: tools
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: matrix.task == 'deps'
+        with:
+          repository: ${{ github.repository_owner }}/.github
+          path: meta
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -165,6 +174,16 @@ jobs:
           set -euo pipefail
           ../tools/scripts/pin-images.sh . | tee "${RUNNER_TEMP}/body.md"
           echo "docker: update pinned base images" > "${RUNNER_TEMP}/headline.txt"
+      - name: Align the org dependencies
+        if: matrix.task == 'deps'
+        working-directory: target
+        run: |
+          set -euo pipefail
+          python3 ../meta/scripts/update-deps.py --root . | tee "${RUNNER_TEMP}/body.md"
+          if [ -s "${RUNNER_TEMP}/body.md" ]; then
+            echo "deps: align the org dependencies" > "${RUNNER_TEMP}/headline.txt"
+          fi
+
       - name: Check for changes
         id: changed
         working-directory: target
