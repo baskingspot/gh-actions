@@ -34,6 +34,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Refuse a repo that also ships binaries
+        run: |
+          set -euo pipefail
+          if [ -f .github/release.yaml ]; then
+            echo "this repo ships binaries; release it with release.yml (just release), not release-library.yml" >&2
+            exit 1
+          fi
+
       - name: Check the version and the changelog
         env:
           VERSION: ${{ inputs.version }}
