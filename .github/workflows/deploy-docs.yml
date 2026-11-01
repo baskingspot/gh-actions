@@ -5,6 +5,10 @@ name: deploy-docs
 # that one Worker, and Terraform in baskingspot/site put it in the repo's
 # secrets.
 #
+# It deploys only while the run's ref still points at the run's commit. A slow
+# CI run for an older push can reach this workflow after a newer push has
+# already deployed; without the check it would put the older site back.
+#
 # A caller gates the job on its `CLOUDFLARE_ACCOUNT_ID` variable, which
 # Terraform also sets, so the job is skipped until the site is registered:
 #
@@ -37,13 +41,40 @@ on:
 permissions: {}
 
 jobs:
+  head:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    outputs:
+      current: ${{ steps.head.outputs.current }}
+    steps:
+      - name: Check that the ref still points at this commit
+        id: head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ref="${REF#refs/}"
+          head="$(gh api "repos/${REPO}/git/ref/${ref}" --jq .object.sha)"
+          if [ "${head}" = "${SHA}" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::${SHA} is not ${REF} (${head}); skip the deploy"
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
+    needs: head
+    if: needs.head.outputs.current == 'true'
     runs-on: ubuntu-26.04
     permissions:
       contents: read
     concurrency:
-      group: deploy-docs
-      cancel-in-progress: false
+      group: deploy-docs-${{ github.repository }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
