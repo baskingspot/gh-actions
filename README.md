@@ -103,6 +103,20 @@ For a Zig repo, pass `zig-cache: true` to try the build cache. Measure it before
 
 Pin the call by commit SHA. The maintenance job moves the pin when this repo changes.
 
+## Installing Zig without Nix
+
+`actions/setup-zig` installs a compiler for a repo that has no flake, such as a small program or a personal repo:
+
+```yaml
+- uses: baskingspot/gh-actions/actions/setup-zig@COMMIT # vX.Y.Z
+  with:
+    version: 0.16.0
+```
+
+It downloads from `zig.baskingspot.dev`, the org's pull-through cache in front of the Zig community mirrors, and checks the Zig Software Foundation's minisign signature before it unpacks anything. The signature's trusted comment must name the requested tarball, so an upstream cannot swap in another build.
+
+`version` may be empty when the checkout has a `build.zig.zon` with `minimum_zig_version`. There is no `latest`: CI should name the compiler it tests. The minisign binary is the upstream static release, pinned by sha256. macOS is arm64 only, because upstream publishes no Intel build.
+
 ## Keeping repos current
 
 `maintain.yml` runs every Monday at 05:23 UTC. It lists the org's repos, skipping archived repos, forks, and any repo whose `stage` property is not `stable`: `incubating` repos are being hacked on, and `mirror` repos have to stay identical to someone else's. For each repo it runs up to three updates, one repo at a time:

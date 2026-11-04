@@ -1,0 +1,15 @@
+name: Install Zig
+description: Install a Zig compiler from zig.baskingspot.dev, with the Zig Software Foundation's signature verified.
+inputs:
+  version:
+    description: The Zig version, such as 0.16.0. Empty reads minimum_zig_version from build.zig.zon.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: bash "${ACTION_PATH}/../../scripts/setup-zig.sh" "${VERSION}"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        VERSION: ${{ inputs.version }}

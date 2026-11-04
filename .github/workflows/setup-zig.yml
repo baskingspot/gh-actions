@@ -1,0 +1,49 @@
+name: setup-zig
+
+# Exercises actions/setup-zig on every runner the org uses. The install is the
+# test: a bad signature, a missing platform build, or a zip path that only works
+# on Linux fails here, not in a calling repo.
+on:
+  push:
+    branches: [main]
+    paths:
+      - actions/setup-zig/**
+      - scripts/setup-zig.sh
+      - scripts/test-setup-zig.sh
+      - .github/workflows/setup-zig.yml
+  pull_request:
+    paths:
+      - actions/setup-zig/**
+      - scripts/setup-zig.sh
+      - scripts/test-setup-zig.sh
+      - .github/workflows/setup-zig.yml
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  install:
+    name: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-26.04
+          - ubuntu-24.04-arm
+          - macos-26
+          - windows-2025
+          - windows-11-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # actionlint does not know the newer $/ syntax yet, and the only earlier
+      # step is the checkout, so the workspace-relative form is safe here.
+      - uses: ./actions/setup-zig # zizmor: ignore[self-repository]
+        with:
+          version: 0.16.0
+      - run: zig version
+      - run: zig env

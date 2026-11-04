@@ -35,6 +35,7 @@ test:
     scripts/test-pin-images.sh
     scripts/test-package.sh
     scripts/test-release-notes.sh
+    scripts/test-setup-zig.sh
     cd scripts && python3 -m unittest -v test_render_cask
 
 [doc("Everything CI runs")]
