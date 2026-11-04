@@ -169,6 +169,13 @@ main() {
 	read -r arch os < <(solve_platform)
 	filename=$(solve_filename "${version}" "${arch}" "${os}")
 	dest="${RUNNER_TOOL_CACHE:-${HOME}/.cache/baskingspot/zig}/${version}/${arch}-${os}"
+	# Windows: Git Bash needs a POSIX path on PATH, and the runner needs a
+	# Windows path in GITHUB_PATH. cygpath is the only thing that knows both.
+	path_entry=${dest}
+	if command -v cygpath >/dev/null 2>&1; then
+		dest=$(cygpath -u "${dest}")
+		path_entry=$(cygpath -w "${path_entry}")
+	fi
 	work=$(mktemp -d)
 	# shellcheck disable=SC2064
 	trap "rm -rf '${work}'" EXIT
@@ -208,7 +215,7 @@ main() {
 
 	# A Zig tarball holds the compiler at its root, not in bin/.
 	if [ -n "${GITHUB_PATH:-}" ]; then
-		printf '%s\n' "${dest}" >>"${GITHUB_PATH}"
+		printf '%s\n' "${path_entry}" >>"${GITHUB_PATH}"
 	else
 		export PATH="${dest}:${PATH}"
 	fi
