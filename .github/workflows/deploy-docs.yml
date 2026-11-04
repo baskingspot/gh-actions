@@ -72,8 +72,11 @@ jobs:
     runs-on: ubuntu-26.04
     permissions:
       contents: read
+    # One deploy at a time per recipe, so an older run cannot put back an
+    # older site. Different recipes are different targets: the router and the
+    # Zig mirror in one repo must not cancel each other.
     concurrency:
-      group: deploy-docs-${{ github.repository }}
+      group: deploy-docs-${{ github.repository }}-${{ inputs.recipe }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
