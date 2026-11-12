@@ -8,6 +8,7 @@
 # grouped by area: commits here are one line, `area: summary`, and a subject
 # with no area goes under "other". Either way, an install section follows. It
 # names the channels every release has, and the Windows zip if DISTDIR has one.
+# The Nix line names the tag, so it runs the release and not whatever main is.
 
 set -euo pipefail
 
@@ -54,7 +55,7 @@ echo "## Install"
 echo
 echo "- mise: \`mise use github:baskingspot/${repo}\`"
 echo "- Homebrew: \`brew install --cask baskingspot/tap/${repo}\`"
-echo "- Nix: \`nix run github:baskingspot/${repo}\`"
+echo "- Nix: \`nix run github:baskingspot/${repo}/${tag}\`"
 shopt -s nullglob
 for zip in "${dist}"/*.zip; do
 	echo "- Windows: unzip \`$(basename "${zip}")\` below and put the program on your \`PATH\`."

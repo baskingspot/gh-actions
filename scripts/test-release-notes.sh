@@ -36,7 +36,7 @@ fi
 # The install section names every channel, and no Windows line without a zip.
 grep -qxF -- '- mise: `mise use github:baskingspot/tool`' <<<"${notes}"
 grep -qxF -- '- Homebrew: `brew install --cask baskingspot/tap/tool`' <<<"${notes}"
-grep -qxF -- '- Nix: `nix run github:baskingspot/tool`' <<<"${notes}"
+grep -qxF -- '- Nix: `nix run github:baskingspot/tool/v0.2.0`' <<<"${notes}"
 if grep -q 'Windows' <<<"${notes}"; then
 	echo "a Windows line appeared without a zip" >&2
 	exit 1
