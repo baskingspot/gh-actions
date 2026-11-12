@@ -24,6 +24,10 @@ name: ci
 # cannot drift from a new stable. Builds pull from the baskingspot Cachix
 # cache. Only a run on main pushes to it, so a pull request cannot put
 # anything in the cache.
+#
+# A repo that ships a program, and so has .github/release.yaml, also gets its
+# flake's default package built by Nix on main, which puts it in the cache:
+# `nix run github:baskingspot/<repo>` is then a download, not a build.
 on:
   workflow_call:
     inputs:
@@ -154,3 +158,40 @@ jobs:
             ~/.cache/zig
             .zig-cache
           key: zig-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shell }}-${{ matrix.recipe }}-${{ github.sha }}
+
+  package:
+    # The program a repo ships, as `nix run` installs it. Nix builds it here,
+    # so cachix-action's post-build hook pushes it to the cache. A repo with
+    # no .github/release.yaml ships no program and does nothing. The cache is
+    # written from the default branch only, as everywhere else.
+    name: package (${{ matrix.runner }})
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-26.04, macos-26]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.35.3/install
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: baskingspot
+          extraPullNames: mattrobenolt
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build the default package
+        # A program that ships must have one, so a release.yaml with no
+        # default package fails here instead of at the user's `nix run`.
+        run: |
+          set -euo pipefail
+          if [ ! -f .github/release.yaml ]; then
+            echo "This repo ships no program; nothing to build."
+            exit 0
+          fi
+          nix build .#default --no-link --print-out-paths
