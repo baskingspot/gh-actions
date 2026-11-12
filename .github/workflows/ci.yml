@@ -66,11 +66,16 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       zig-cache: ${{ steps.plan.outputs.zig-cache }}
+      package: ${{ steps.plan.outputs.package }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: .github/ci.yaml
+          # release.yaml says the repo ships a program, which the package job
+          # below then builds.
+          sparse-checkout: |
+            .github/ci.yaml
+            .github/release.yaml
           sparse-checkout-cone-mode: false
       - name: Plan the jobs
         id: plan
@@ -99,6 +104,11 @@ jobs:
           fi
           echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
           echo "zig-cache=${zig_cache}" >> "${GITHUB_OUTPUT}"
+          if [ -f .github/release.yaml ]; then
+            echo "package=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "package=false" >> "${GITHUB_OUTPUT}"
+          fi
           jq -r '.[] | "\(.recipe) on \(.runner)" + (if .blocking then "" else " (non-blocking)" end)' <<< "${matrix}"
         env:
           RECIPES: ${{ inputs.recipes || '["ci"]' }}
@@ -165,14 +175,17 @@ jobs:
     # no .github/release.yaml ships no program and does nothing. The cache is
     # written from the default branch only, as everywhere else.
     name: package (${{ matrix.runner }})
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    needs: plan
+    if: needs.plan.outputs.package == 'true' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-26.04, macos-26]
+        # One runner per system a repo may declare, so a user on any of them
+        # pulls a binary.
+        runner: [ubuntu-26.04, ubuntu-26.04-arm, macos-26]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -188,10 +201,4 @@ jobs:
       - name: Build the default package
         # A program that ships must have one, so a release.yaml with no
         # default package fails here instead of at the user's `nix run`.
-        run: |
-          set -euo pipefail
-          if [ ! -f .github/release.yaml ]; then
-            echo "This repo ships no program; nothing to build."
-            exit 0
-          fi
-          nix build .#default --no-link --print-out-paths
+        run: nix build .#default --no-link --print-out-paths

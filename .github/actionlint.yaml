@@ -3,3 +3,5 @@
 self-hosted-runner:
   labels:
     - ubuntu-26.04
+    # The arm64 image of the same release, which the package job needs.
+    - ubuntu-26.04-arm
