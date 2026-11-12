@@ -33,8 +33,9 @@ name: release
 # linux-arm64, macos-arm64, and windows-x64. The default is the first three.
 # Windows ships as a zip and nothing else. Another channel is another job after
 # `publish`. The caller needs
-# APP_PRIVATE_KEY and the variable APP_CLIENT_ID for step 4: both are org
-# values that a repo is added to when it ships a program.
+# APP_PRIVATE_KEY and the variable APP_CLIENT_ID: both are org values that a
+# repo is added to when it ships a program, and the plan job mints the tap's
+# token to check that the grant is there before the release exists.
 on:
   workflow_call:
     secrets:
@@ -80,12 +81,24 @@ jobs:
           echo "binary=${binary}" >> "${GITHUB_OUTPUT}"
           echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
           jq -r '.[] | "\(.asset) from \(.target)"' <<< "${matrix}"
+      - name: Check the tap token
+        # The cask is the last thing a release writes, after the release and
+        # its notes exist, so a repo that was not on the App's selected list
+        # promised an install command that never arrived (bs v0.1.0). Mint
+        # the token here, where a failure publishes nothing.
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-tap
+          permission-contents: write
 
   ci:
     needs: plan
     permissions:
       contents: read
-    uses: baskingspot/gh-actions/.github/workflows/ci.yml@a26279caa6babcb0b548e6c55ced2aac9ee9a5b9 # v0.12.1
+    uses: baskingspot/gh-actions/.github/workflows/ci.yml@ebf26b4588ad1706f06162ce837eda1cf094508e # v0.13.2
     secrets:
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
@@ -117,7 +130,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
       - name: Bundle
-        uses: baskingspot/gh-actions/actions/package@a26279caa6babcb0b548e6c55ced2aac9ee9a5b9 # v0.12.1
+        uses: baskingspot/gh-actions/actions/package@ebf26b4588ad1706f06162ce837eda1cf094508e # v0.13.2
         with:
           binary: ${{ needs.plan.outputs.binary }}
           tag: ${{ github.ref_name }}
@@ -162,7 +175,7 @@ jobs:
         with:
           subject-path: dist/*
       - name: Release notes
-        uses: baskingspot/gh-actions/actions/release-notes@a26279caa6babcb0b548e6c55ced2aac9ee9a5b9 # v0.12.1
+        uses: baskingspot/gh-actions/actions/release-notes@ebf26b4588ad1706f06162ce837eda1cf094508e # v0.13.2
         with:
           tag: ${{ github.ref_name }}
           repo: ${{ github.event.repository.name }}
@@ -180,7 +193,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
       - name: Write the cask
-        uses: baskingspot/gh-actions/actions/render-cask@a26279caa6babcb0b548e6c55ced2aac9ee9a5b9 # v0.12.1
+        uses: baskingspot/gh-actions/actions/render-cask@ebf26b4588ad1706f06162ce837eda1cf094508e # v0.13.2
         with:
           repo: ${{ github.event.repository.name }}
           tag: ${{ github.ref_name }}
