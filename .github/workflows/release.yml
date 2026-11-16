@@ -98,7 +98,7 @@ jobs:
     needs: plan
     permissions:
       contents: read
-    uses: baskingspot/gh-actions/.github/workflows/ci.yml@ebf26b4588ad1706f06162ce837eda1cf094508e # v0.13.2
+    uses: baskingspot/gh-actions/.github/workflows/ci.yml@a8c8fd0d7e28ac1ceffd1c0eb4dc642f09756c60 # v0.13.3
     secrets:
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
@@ -130,7 +130,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
       - name: Bundle
-        uses: baskingspot/gh-actions/actions/package@ebf26b4588ad1706f06162ce837eda1cf094508e # v0.13.2
+        uses: baskingspot/gh-actions/actions/package@a8c8fd0d7e28ac1ceffd1c0eb4dc642f09756c60 # v0.13.3
         with:
           binary: ${{ needs.plan.outputs.binary }}
           tag: ${{ github.ref_name }}
@@ -175,7 +175,7 @@ jobs:
         with:
           subject-path: dist/*
       - name: Release notes
-        uses: baskingspot/gh-actions/actions/release-notes@ebf26b4588ad1706f06162ce837eda1cf094508e # v0.13.2
+        uses: baskingspot/gh-actions/actions/release-notes@a8c8fd0d7e28ac1ceffd1c0eb4dc642f09756c60 # v0.13.3
         with:
           tag: ${{ github.ref_name }}
           repo: ${{ github.event.repository.name }}
@@ -193,7 +193,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
       - name: Write the cask
-        uses: baskingspot/gh-actions/actions/render-cask@ebf26b4588ad1706f06162ce837eda1cf094508e # v0.13.2
+        uses: baskingspot/gh-actions/actions/render-cask@a8c8fd0d7e28ac1ceffd1c0eb4dc642f09756c60 # v0.13.3
         with:
           repo: ${{ github.event.repository.name }}
           tag: ${{ github.ref_name }}
