@@ -36,6 +36,14 @@ name: release
 # APP_PRIVATE_KEY and the variable APP_CLIENT_ID: both are org values that a
 # repo is added to when it ships a program, and the plan job mints the tap's
 # token to check that the grant is there before the release exists.
+#
+# A second run of the build at the same tag gives the same archive for
+# linux-x64, linux-arm64, and windows-x64. It does not for macos-arm64. Zig
+# 0.16's Mach-O linker writes the mtime of each object file into its N_OSO
+# debug-map entry. A fresh build writes a fresh object, so that field changes.
+# LC_UUID is an MD5 of the file, and the ad-hoc code signature hashes each
+# page, so both change with it. Zig has no knob to zero the field. See
+# baskingspot/gh-actions#1 for the byte offsets.
 on:
   workflow_call:
     secrets:

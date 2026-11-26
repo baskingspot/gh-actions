@@ -13,8 +13,10 @@
 #     zigdoc-v1.2.3-linux-x64/LICENSE
 #
 # Debug symbols (*.pdb) are left out. A windows-* ASSET is a .zip, and every other ASSET is a .tar.gz. The archive
-# is reproducible: file order, owners, and times are fixed. Set
-# SOURCE_DATE_EPOCH to the release commit's time. Needs GNU tar, gzip, zip.
+# adds nothing that changes between runs: file order, owners, and times are fixed. Set
+# SOURCE_DATE_EPOCH to the release commit's time. Same files in, same archive out.
+# Whether the files are the same is up to the build: a macos-* binary from Zig
+# 0.16 is not (see release.yml). Needs GNU tar, gzip, zip.
 
 set -euo pipefail
 
