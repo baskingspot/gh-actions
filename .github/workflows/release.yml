@@ -41,9 +41,13 @@ name: release
 # linux-x64, linux-arm64, and windows-x64. It does not for macos-arm64. Zig
 # 0.16's Mach-O linker writes the mtime of each object file into its N_OSO
 # debug-map entry. A fresh build writes a fresh object, so that field changes.
-# LC_UUID is an MD5 of the file, and the ad-hoc code signature hashes each
-# page, so both change with it. Zig has no knob to zero the field. See
-# baskingspot/gh-actions#1 for the byte offsets.
+# Zig derives LC_UUID from an MD5 over everything before the code signature
+# (`src/link/MachO.zig` and `src/link/MachO/uuid.zig` in the compiler), and the
+# ad-hoc signature hashes each page, so both move with it. Building the macOS
+# target with `-Dstrip` removes the debug map and makes it reproduce as well,
+# byte for byte, from either host; a program's `build.zig` has to declare that
+# option first. See baskingspot/gh-actions#1 for the byte offsets and the
+# measurements.
 on:
   workflow_call:
     secrets:
