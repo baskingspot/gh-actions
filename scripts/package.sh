@@ -15,8 +15,9 @@
 # Debug symbols (*.pdb) are left out. A windows-* ASSET is a .zip, and every other ASSET is a .tar.gz. The archive
 # adds nothing that changes between runs: file order, owners, and times are fixed. Set
 # SOURCE_DATE_EPOCH to the release commit's time. Same files in, same archive out.
-# Whether the files are the same is up to the build: a macos-* binary from Zig
-# 0.16 is not (see release.yml). Needs GNU tar, gzip, zip.
+# The build leaves the debug map out (`-Dstrip` in release-build), so the binary
+# is the same too; Zig 0.16 would otherwise write object mtimes into a Mach-O.
+# Needs GNU tar, gzip, zip.
 
 set -euo pipefail
 
